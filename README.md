@@ -15,6 +15,9 @@ tags, so you import exactly the pieces you use.
 | [objex/drivers/filesystem](objex/drivers/filesystem) | `github.com/brian-nunez/bkit/objex/drivers/filesystem` | objex driver for a local directory |
 | [objex/drivers/s3](objex/drivers/s3) | `github.com/brian-nunez/bkit/objex/drivers/s3` | objex driver for S3 and S3-compatible services |
 | [gate](gate) | `github.com/brian-nunez/bkit/gate` | Typed, composable boolean rules and checks |
+| [settings](settings) | `github.com/brian-nunez/bkit/settings` | Configuration loaded and merged from any number of sources |
+| [settings/drivers/yaml](settings/drivers/yaml) | `github.com/brian-nunez/bkit/settings/drivers/yaml` | YAML format for settings |
+| [settings/drivers/toml](settings/drivers/toml) | `github.com/brian-nunez/bkit/settings/drivers/toml` | TOML format for settings |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
