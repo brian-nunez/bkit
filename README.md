@@ -23,6 +23,7 @@ tags, so you import exactly the pieces you use.
 | [rdb](rdb) | `github.com/brian-nunez/bkit/rdb` | One API over relational databases: pooling, placeholders, scanning, errors, transactions |
 | [rdb/drivers/sqlite](rdb/drivers/sqlite) | `github.com/brian-nunez/bkit/rdb/drivers/sqlite` | rdb driver for SQLite |
 | [rdb/drivers/postgres](rdb/drivers/postgres) | `github.com/brian-nunez/bkit/rdb/drivers/postgres` | rdb driver for PostgreSQL, built on pgx |
+| [rdb/drivers/mysql](rdb/drivers/mysql) | `github.com/brian-nunez/bkit/rdb/drivers/mysql` | rdb driver for MySQL and MariaDB |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
