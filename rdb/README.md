@@ -18,6 +18,14 @@ go get github.com/brian-nunez/bkit/rdb
 import "github.com/brian-nunez/bkit/rdb"
 ```
 
+Then install a driver for each database the application uses:
+
+| Driver | Module | Database | URL schemes |
+| --- | --- | --- | --- |
+| [sqlite](drivers/sqlite) | `github.com/brian-nunez/bkit/rdb/drivers/sqlite` | SQLite, pure Go with no cgo | `sqlite:`, `sqlite3:` |
+| [postgres](drivers/postgres) | `github.com/brian-nunez/bkit/rdb/drivers/postgres` | PostgreSQL, through pgx | `postgres:`, `postgresql:` |
+| [mysql](drivers/mysql) | `github.com/brian-nunez/bkit/rdb/drivers/mysql` | MySQL and MariaDB | `mysql:`, `mariadb:` |
+
 ## Usage
 
 Pass every driver the application supports. The URL's scheme picks one, and
@@ -26,8 +34,8 @@ and another in production by changing `DATABASE_URL`:
 
 ```go
 db, err := rdb.Open(ctx, os.Getenv("DATABASE_URL"),
-	rdb.WithDriver(localDriver),
-	rdb.WithDriver(serverDriver),
+	sqlite.Driver(),
+	postgres.Driver(),
 	rdb.WithMaxOpenConns(25),
 )
 if err != nil {
@@ -36,8 +44,25 @@ if err != nil {
 defer db.Close()
 ```
 
-An unknown scheme fails with `rdb.ErrUnknownDriver`. Driver modules also
-offer a typed `Open` that takes a `Config` struct.
+| `DATABASE_URL` | Result |
+| --- | --- |
+| `sqlite:dev.db` | A SQLite database in `dev.db` |
+| `postgres://app:secret@db.internal/app` | A Postgres connection pool |
+| `mysql://app:secret@db.internal/app` | `rdb.ErrUnknownDriver`, because no mysql driver was passed |
+
+Only the drivers passed to `Open` are compiled into the binary.
+
+Each driver module also has a typed `Open` that takes a `Config` struct in
+place of a URL. It accepts the same rdb options:
+
+```go
+db, err := postgres.Open(ctx, postgres.Config{
+	Host:     "db.internal",
+	Database: "app",
+	User:     user,
+	Password: password,
+}, rdb.WithMaxOpenConns(25))
+```
 
 ### Queries
 
