@@ -1,0 +1,27 @@
+# Local Vault dev server for the vault driver's integration tests.
+#
+#   docker compose -f settings/drivers/vault/docker-compose.yml up -d --wait
+#   SETTINGS_VAULT_ADDR=http://localhost:8200 make -C settings/drivers/vault tests
+#   docker compose -f settings/drivers/vault/docker-compose.yml down
+#
+# Dev mode keeps everything in memory and mounts KV version 2 at secret/.
+# The image is pinned by digest (Vault 2.2.0).
+services:
+  vault:
+    image: hashicorp/vault@sha256:e0acd3c681bdf57f002d7214e5d050b876e1704678005c6b0406dd96a65be919
+    command: ["server", "-dev", "-dev-listen-address=0.0.0.0:8200"]
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: settingstest-root
+      VAULT_ADDR: http://127.0.0.1:8200
+    cap_add:
+      - IPC_LOCK
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
