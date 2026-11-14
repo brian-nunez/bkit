@@ -24,9 +24,32 @@ bkit/
 `COMPONENTS` in the root `Makefile` is the single inventory of released
 modules, listed in release order. `scripts/check-components.sh` keeps it
 honest: every `go.mod` outside the root and `examples/` must be registered;
-every component needs `go.mod`, `Makefile`, `.releaserc.json`, `README.md`,
-and `doc.go`; module paths, `go` directives, and tag formats must match; and
-a driver must follow its parent.
+every component needs `go.mod`, `Makefile` (with a `coverage-check`
+target), `.releaserc.json`, `README.md`, and `doc.go`; module paths, `go`
+directives, and tag formats must match; and a driver must follow its parent.
+
+## Coverage
+
+Every module must reach 100% statement coverage from its own tests, without
+external services. Each module Makefile's `coverage-check` reads the
+`coverage.out` written by `tests`, fails below `100.0%`, and lists every
+function under it. It runs in three places:
+
+- `make check` (root and per module);
+- the **Check coverage** step of `tests.yml`, after **Run tests**;
+- `scripts/check-go-module.sh`, before a release is tagged.
+
+Code that talks to an external service is covered through an internal
+interface and an in-memory fake (the s3 driver runs the full objex contract
+suite against a fake S3 client); OS failures that cannot be produced on
+demand are covered through an unexported seam. Tests against real services,
+such as the s3 driver's MinIO suite, are additional and skipped unless their
+environment variable is set.
+
+A module Makefile may set `COVERAGE_EXCLUDE`, an extended regular expression
+of package paths, only for a shared test-helper package other modules import
+from their tests. The one use is `objex/Makefile`, which excludes
+`objex/objextest`, the contract suite each objex driver runs.
 
 ### Workspaces
 
@@ -66,7 +89,7 @@ release.
 | --- | --- | --- |
 | `commitlint.yml` | pull requests | Lints commit messages and the PR title |
 | `lint.yml` | push to `main`, pull requests, merge queue | golangci-lint in every directory with a `go.mod`, including examples |
-| `tests.yml` | push to `main`, pull requests, merge queue | `check-components`, then `make -C <module> build-actions tests-actions` per component |
+| `tests.yml` | push to `main`, pull requests, merge queue | `check-components`, then per component `make -C <module> build-actions tests-actions` and **Check coverage** (`make -C <module> coverage-check`, 100% required) |
 | `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
 
 `lint-result` and `tests-result` aggregate their matrices into single checks
@@ -88,7 +111,7 @@ Releases are fully automated from Conventional Commits.
    4. with relevant commits, semantic-release computes the version and runs
       `scripts/check-go-module.sh` (`prepareCmd`): module path matches the
       major version, no `replace`, tidy `go.mod`, no tracked release tooling,
-      build, vet, and race tests;
+      build, vet, race tests, and 100% coverage;
    5. semantic-release pushes the tag `<module>/vX.Y.Z` and creates a GitHub
       Release with generated notes;
    6. `scripts/verify-go-module.sh` resolves the new version through

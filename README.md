@@ -42,8 +42,11 @@ release tooling locally.
 ```shell
 make tools    # install the pinned golangci-lint into .tools/bin
 make doctor   # confirm Go and golangci-lint versions
-make check    # format check, lint, vet, and race-enabled tests for every module
+make check    # format check, lint, vet, race-enabled tests, and 100% coverage for every module
 ```
+
+Every module must reach 100% statement coverage from its own tests, with no
+external services. CI and releases enforce it with `make coverage-check`.
 
 Run `make help` for every target, or `make -C <module> help` for one module.
 [CONTRIBUTING.md](CONTRIBUTING.md) covers commits and pull requests.

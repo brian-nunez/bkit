@@ -100,14 +100,17 @@ Caveats:
 
 ## Development
 
-Unit tests run without a service:
+Unit tests need no service. They run the full objex contract suite against
+an in-memory fake S3 client, plus driver-specific tests, and `coverage-check`
+requires 100% statement coverage from them alone:
 
 ```shell
 make -C objex/drivers/s3 check
 ```
 
-The conformance and multipart integration tests run against a local MinIO
-when `OBJEX_S3_ENDPOINT` is set:
+The same contract suite, plus multipart tests, also runs against a real
+S3-compatible service when `OBJEX_S3_ENDPOINT` is set; this is in addition to
+the unit tests and is not needed for coverage:
 
 ```shell
 docker compose -f objex/drivers/s3/docker-compose.yml up -d

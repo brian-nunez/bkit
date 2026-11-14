@@ -60,6 +60,9 @@ jobs:
       - name: Run tests
         run: make -C "${{ matrix.module }}" build-actions tests-actions
 
+      - name: Check coverage
+        run: make -C "${{ matrix.module }}" coverage-check
+
   # Single required status check that stays stable as modules are added. A
   # skipped tests job (no components yet) counts as success.
   tests-result:

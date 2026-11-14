@@ -190,6 +190,10 @@ func TestConformance(t *testing.T) {
 `objextest.RunManager` and `objextest.RunPresigner` cover bucket management
 and presigned URLs.
 
+bkit drivers reach 100% statement coverage without their backend: wrap the
+backend client in an unexported interface and run the suite against an
+in-memory fake of it, as the s3 driver does.
+
 ## Development
 
 From the repository root:
@@ -197,6 +201,11 @@ From the repository root:
 ```shell
 make -C objex check
 ```
+
+`check` includes `coverage-check`, which requires 100% statement coverage.
+`objex/objextest` is excluded (`COVERAGE_EXCLUDE` in `objex/Makefile`): it is
+the contract suite, test code that every driver runs in full from its own
+tests.
 
 ## Releases
 

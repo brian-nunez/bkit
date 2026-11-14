@@ -3,12 +3,17 @@
 MODULE_NAME := objex/drivers/filesystem
 REPOSITORY_ROOT := $(abspath $(CURDIR)/../../..)
 
+# Package paths (an extended regular expression) left out of coverage-check.
+# Reserved for shared test-helper packages, such as a driver contract suite;
+# every other package must reach 100% statement coverage.
+COVERAGE_EXCLUDE ?=
+
 .DEFAULT_GOAL := help
 .NOTPARALLEL: check
 
 include $(REPOSITORY_ROOT)/make/development.mk
 
-.PHONY: benchmarks benchmarks-actions benchmarks-nobuild build build-actions check clean format format-check help lint test tests tests-actions tests-nobuild tidy vet
+.PHONY: benchmarks benchmarks-actions benchmarks-nobuild build build-actions check clean coverage-check format format-check help lint test tests tests-actions tests-nobuild tidy vet
 
 help:
 	@echo "$(MODULE_NAME) module developer commands:"
@@ -19,12 +24,13 @@ help:
 	@echo "  make lint          Run the CI-equivalent Go linters."
 	@echo "  make vet           Run go vet."
 	@echo "  make tests         Build and run race-enabled tests."
+	@echo "  make coverage-check  Require 100% statement coverage from the last test run."
 	@echo "  make benchmarks    Build and run benchmarks."
 	@echo "  make tidy          Tidy go.mod and go.sum."
 	@echo "  make check         Run the complete local pre-PR validation."
 	@echo "  make clean         Remove generated build and test artifacts."
 
-check: doctor format-check lint vet tests
+check: doctor format-check lint vet tests coverage-check
 
 build: check-go
 	@echo "Building $(MODULE_NAME)..."
@@ -45,6 +51,24 @@ tests-nobuild: check-go
 	$(GO_BINARY) test -race -v -covermode=atomic -coverprofile=coverage.out ./...
 
 tests-actions: tests-nobuild
+
+coverage-check: check-go
+	@if [ ! -f coverage.out ]; then \
+		echo "ERROR: coverage.out not found. Run 'make tests' before 'make coverage-check'."; \
+		exit 1; \
+	fi
+	@if [ -n "$(COVERAGE_EXCLUDE)" ]; then \
+		grep -vE '$(COVERAGE_EXCLUDE)' coverage.out > coverage.check.out; \
+	else \
+		cp coverage.out coverage.check.out; \
+	fi
+	@total="$$($(GO_BINARY) tool cover -func=coverage.check.out | awk '/^total:/ {print $$NF}')"; \
+	if [ "$$total" != "100.0%" ]; then \
+		echo "ERROR: $(MODULE_NAME) coverage is $${total:-unknown}; 100.0% is required."; \
+		$(GO_BINARY) tool cover -func=coverage.check.out | awk '$$NF != "100.0%"'; \
+		exit 1; \
+	fi; \
+	echo "$(MODULE_NAME) coverage: $$total"
 
 benchmarks: build benchmarks-nobuild
 
@@ -85,4 +109,4 @@ vet: check-go
 
 clean:
 	@echo "Cleaning $(MODULE_NAME)..."
-	rm -rf vendor/ coverage.out coverage.html
+	rm -rf vendor/ coverage.out coverage.check.out coverage.html

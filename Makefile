@@ -10,7 +10,7 @@ REPOSITORY_ROOT := $(CURDIR)
 
 include make/development.mk
 
-.PHONY: build build-actions check check-components clean format format-check get-all-release-packages help lint test tests unit vet
+.PHONY: build build-actions check check-components clean coverage-check format format-check get-all-release-packages help lint test tests unit vet
 
 help:
 	@echo "bkit developer commands:"
@@ -21,11 +21,12 @@ help:
 	@echo "  make lint              Run the CI-equivalent Go linters for every module"
 	@echo "  make vet               Run go vet for every module"
 	@echo "  make tests             Build and run race-enabled tests for every module"
+	@echo "  make coverage-check    Require 100% statement coverage for every module"
 	@echo "  make check-components  Validate module registration and release configuration"
 	@echo "  make check             Run the complete local pre-PR validation"
 	@echo "  make clean             Remove generated build and test artifacts"
 
-check: doctor check-components format-check lint vet tests
+check: doctor check-components format-check lint vet tests coverage-check
 
 check-components:
 	@scripts/check-components.sh
@@ -51,6 +52,11 @@ build-actions: check-go
 unit: check-go
 	@for dir in $(COMPONENTS); do \
 		$(MAKE) -C $$dir tests-actions || exit 1; \
+	done
+
+coverage-check: check-go
+	@for dir in $(COMPONENTS); do \
+		$(MAKE) --no-print-directory -C $$dir coverage-check || exit 1; \
 	done
 
 format: check-golangci-lint

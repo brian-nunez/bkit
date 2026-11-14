@@ -49,7 +49,7 @@ func TestValidateKey(t *testing.T) {
 }
 
 func TestValidateBucketName(t *testing.T) {
-	for _, name := range []string{"abc", "my-bucket", "my.bucket.v2", "123", strings.Repeat("a", 63), "1.2.3"} {
+	for _, name := range []string{"abc", "my-bucket", "my.bucket.v2", "123", strings.Repeat("a", 63), "1.2.3", "1234.5.6.7", "1.2.3.a"} {
 		if err := ValidateBucketName(name); err != nil {
 			t.Errorf("ValidateBucketName(%q) = %v, want nil", name, err)
 		}

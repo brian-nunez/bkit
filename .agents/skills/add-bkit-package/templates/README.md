@@ -36,6 +36,9 @@ From the repository root:
 make -C __MODULE__ check
 ```
 
+`check` runs format check, lint, vet, race-enabled tests, and
+`coverage-check`, which requires 100% statement coverage.
+
 ## Releases
 
 Released independently with tags of the form `__MODULE__/vX.Y.Z`:

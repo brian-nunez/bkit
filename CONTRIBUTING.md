@@ -26,6 +26,14 @@ make check
 
 For one module, `make -C <module> check`.
 
+`make check` includes `coverage-check`: every module needs 100% statement
+coverage from tests that run without external services, and CI blocks the
+pull request otherwise. When it fails, it lists each function below 100%;
+`go tool cover -html=coverage.out`, run in the module directory after
+`make tests`, shows the uncovered lines. Cover code that calls a
+service through an in-memory fake of an internal interface rather than
+lowering the bar.
+
 ## Commit messages and pull request titles
 
 Both follow [Conventional Commits](https://www.conventionalcommits.org/) and
