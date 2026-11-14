@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.21.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.10
 	github.com/aws/smithy-go v1.28.9
-	github.com/brian-nunez/bkit/objex v0.0.0
+	github.com/brian-nunez/bkit/objex v1.0.0
 )
 
 require (
@@ -26,6 +26,3 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.44.5 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.52.0 // indirect
 )
-
-// Temporary until objex is released; check-go-module.sh blocks a release while it is present.
-replace github.com/brian-nunez/bkit/objex => ../..
