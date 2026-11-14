@@ -170,3 +170,76 @@ func TestInvalidBucketNames(t *testing.T) {
 		t.Errorf("BucketExists: err = %v", err)
 	}
 }
+
+// cancelingReader cancels its context after the first read, so the next
+// read observes the cancellation.
+type cancelingReader struct {
+	cancel context.CancelFunc
+	read   bool
+}
+
+func (r *cancelingReader) Read(p []byte) (int, error) {
+	if r.read {
+		return 0, errors.New("read after cancel")
+	}
+	r.read = true
+	r.cancel()
+	return copy(p, "partial"), nil
+}
+
+func TestPutCanceledWhileReading(t *testing.T) {
+	b := newBucket(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := b.Put(ctx, "k", &cancelingReader{cancel: cancel})
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("Put: err = %v, want context.Canceled", err)
+	}
+	if ok, err := objex.Exists(context.Background(), b, "k"); err != nil || ok {
+		t.Errorf("canceled Put stored an object: %v, %v", ok, err)
+	}
+}
+
+func TestListCanceledDuringIteration(t *testing.T) {
+	b := newBucket(t)
+	for _, key := range []string{"a", "b", "c"} {
+		if _, err := b.Put(context.Background(), key, strings.NewReader("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	var keys []string
+	var lastErr error
+	for info, err := range b.List(ctx) {
+		if err != nil {
+			lastErr = err
+			break
+		}
+		keys = append(keys, info.Key)
+		cancel()
+	}
+	if len(keys) != 1 || !errors.Is(lastErr, context.Canceled) {
+		t.Errorf("List after cancel = %q, %v; want one key then context.Canceled", keys, lastErr)
+	}
+}
+
+func TestCopyInvalidOption(t *testing.T) {
+	b := newBucket(t)
+	if _, err := b.Put(context.Background(), "src", strings.NewReader("x")); err != nil {
+		t.Fatal(err)
+	}
+	_, err := b.Copy(context.Background(), "dst", "src", objex.WithMetadata(map[string]string{"bad key": "v"}))
+	if !errors.Is(err, objex.ErrInvalidOption) {
+		t.Errorf("Copy with invalid metadata: err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestMoveMissingOntoItself(t *testing.T) {
+	b := newBucket(t).(*memory.Bucket)
+	if _, err := b.Move(context.Background(), "absent", "absent"); !errors.Is(err, objex.ErrNotFound) {
+		t.Errorf("Move a missing key onto itself: err = %v, want ErrNotFound", err)
+	}
+}

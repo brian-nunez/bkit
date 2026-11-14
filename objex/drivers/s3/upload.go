@@ -139,8 +139,8 @@ func (b *Bucket) uploadParts(ctx context.Context, key string, uploadID *string, 
 
 	var size int64
 	for number := int32(1); ; number++ {
-		if number > maxParts {
-			fail(fmt.Errorf("body exceeds %d parts of %d bytes; increase WithPartSize", maxParts, b.client.partSize))
+		if number > b.client.maxParts {
+			fail(fmt.Errorf("body exceeds %d parts of %d bytes; increase WithPartSize", b.client.maxParts, b.client.partSize))
 			break
 		}
 		select {

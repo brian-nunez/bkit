@@ -271,10 +271,6 @@ func (b *Bucket) Copy(ctx context.Context, dst, src string, opts ...objex.CopyOp
 		etag, modified, err = b.copyObject(ctx, dst, src, source.ETag, info, replace)
 	}
 	if err != nil {
-		var objexErr *objex.Error
-		if errors.As(err, &objexErr) {
-			return objex.ObjectInfo{}, err
-		}
 		return objex.ObjectInfo{}, wrap(op, b.name, dst, err)
 	}
 	info.ETag = etag

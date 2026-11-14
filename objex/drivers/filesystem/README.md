@@ -111,6 +111,9 @@ atomic within one process. When several processes share a root,
 make -C objex/drivers/filesystem check
 ```
 
+`check` runs the objex contract suite and the driver's own tests, and
+`coverage-check` requires 100% statement coverage.
+
 ## Releases
 
 Released independently with tags of the form

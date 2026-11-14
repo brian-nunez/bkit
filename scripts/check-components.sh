@@ -65,6 +65,10 @@ for component in $components; do
     fi
   done
 
+  if [ -f "$component/Makefile" ] && ! grep -qE '^coverage-check:' "$component/Makefile"; then
+    fail "$component/Makefile has no coverage-check target; copy it from the add-bkit-package template"
+  fi
+
   if [ -f "$component/go.mod" ]; then
     expected_path="github.com/brian-nunez/bkit/$component"
     actual_path=$(awk '$1 == "module" { print $2; exit }' "$component/go.mod")

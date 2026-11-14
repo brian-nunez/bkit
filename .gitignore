@@ -1,6 +1,7 @@
 # Build and test artifacts
 vendor/
 coverage.out
+coverage.check.out
 coverage.html
 
 # Repository-local tools (make tools)

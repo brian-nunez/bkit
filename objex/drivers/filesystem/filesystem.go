@@ -70,7 +70,7 @@ func WithClock(now func() time.Time) Option {
 // Client stores buckets as directories under a root. It implements
 // objex.Manager.
 type Client struct {
-	root       *os.Root
+	root       rootFS
 	baseURL    *url.URL
 	signingKey []byte
 	now        func() time.Time
@@ -102,8 +102,52 @@ func New(root string, opts ...Option) (*Client, error) {
 		_ = r.Close()
 		return nil, objex.NewError("open", "", "", kindOf(err), err)
 	}
-	c.root = r
+	c.root = osRoot{r}
 	return c, nil
+}
+
+// rootFS is the subset of *os.Root the driver uses. Every path the driver
+// touches goes through it, which keeps all access confined to the root.
+type rootFS interface {
+	Close() error
+	FS() fs.FS
+	Link(oldname, newname string) error
+	Lstat(name string) (fs.FileInfo, error)
+	Mkdir(name string, perm fs.FileMode) error
+	MkdirAll(name string, perm fs.FileMode) error
+	Open(name string) (file, error)
+	OpenFile(name string, flag int, perm fs.FileMode) (file, error)
+	Remove(name string) error
+	RemoveAll(name string) error
+	Rename(oldname, newname string) error
+	Stat(name string) (fs.FileInfo, error)
+}
+
+// file is the subset of *os.File the driver uses.
+type file interface {
+	io.ReadWriteSeeker
+	io.Closer
+	Stat() (fs.FileInfo, error)
+	Sync() error
+}
+
+// osRoot adapts *os.Root to rootFS.
+type osRoot struct{ *os.Root }
+
+func (r osRoot) Open(name string) (file, error) {
+	f, err := r.Root.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+func (r osRoot) OpenFile(name string, flag int, perm fs.FileMode) (file, error) {
+	f, err := r.Root.OpenFile(name, flag, perm)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
 }
 
 // Close releases the root directory. Handles from the Client must not be
@@ -430,7 +474,7 @@ func (b *Bucket) Get(ctx context.Context, key string, opts ...objex.GetOption) (
 }
 
 // open opens the object file for reading and returns its FileInfo.
-func (b *Bucket) open(op, key string) (*os.File, fs.FileInfo, error) {
+func (b *Bucket) open(op, key string) (file, fs.FileInfo, error) {
 	f, err := b.client.root.Open(b.objectPath(key))
 	if err != nil {
 		return nil, nil, b.missing(op, key, err)

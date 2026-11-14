@@ -85,9 +85,8 @@ Start from [`templates/`](templates/) and replace every placeholder:
 
 Once a module exists, copy from it instead of the template when they differ.
 
-A module whose implementation is intentionally deferred may start with only
-`doc.go`, but it must build and its README must state the actual supported
-surface.
+Every module ships with an implementation and tests at 100% statement
+coverage; there is no doc-only placeholder module.
 
 ### go.mod
 
@@ -152,12 +151,22 @@ Copy `templates/Makefile` (or an existing module's `Makefile`) to
 `<module>/Makefile`, set `MODULE_NAME` and `REPOSITORY_ROOT`, and keep the
 recipe tabs. `make/development.mk` supplies the pinned Go and linter
 versions, `GOWORK=off`, `doctor`, and `tools`; the module Makefile supplies
-build, test, format, lint, vet, and clean.
+build, test, coverage, format, lint, vet, and clean.
 
 Keep every target the root `Makefile` and workflows invoke (`build-actions`,
-`tests-actions`, `check`, `format-check`, `lint`, `vet`, `clean`).
+`tests-actions`, `coverage-check`, `check`, `format-check`, `lint`, `vet`,
+`clean`). `scripts/check-components.sh` fails a component whose Makefile has
+no `coverage-check`.
 
-Completion criterion: `make -C <module> check` passes.
+`coverage-check` reads the `coverage.out` written by the last test run and
+fails unless total statement coverage is exactly 100.0%, listing every
+function below it. Leave `COVERAGE_EXCLUDE` empty. Set it only to exclude a
+shared test-helper package that other modules import from their tests (such
+as `objex/objextest`, a driver contract suite), with a comment saying why;
+library code is never excluded.
+
+Completion criterion: `make -C <module> check` passes, including
+`coverage-check` at 100.0%.
 
 ## Add release configuration
 
@@ -169,7 +178,8 @@ releases its parent.
 
 `prepareCmd` runs `scripts/check-go-module.sh` before the tag exists: it
 rejects a module path that does not match the major version, `replace`
-directives, untidy `go.mod`, and failing builds or tests. After the tag is
+directives, untidy `go.mod`, failing builds or tests, and coverage below
+100% (it runs the module's `tests-nobuild coverage-check`). After the tag is
 pushed, the workflow runs `scripts/verify-go-module.sh` against
 proxy.golang.org.
 
@@ -202,9 +212,9 @@ COMPONENTS = <dependency> <module> <module>/drivers/<driver>
 ```
 
 `scripts/check-components.sh` (run by `make check` and CI) fails when a
-module is missing from `COMPONENTS`, a component lacks its files, a driver
-precedes its parent, a `tagFormat` does not match its directory, or a
-`go.mod` declares a different Go version.
+module is missing from `COMPONENTS`, a component lacks its files or a
+`coverage-check` target, a driver precedes its parent, a `tagFormat` does
+not match its directory, or a `go.mod` declares a different Go version.
 
 Update the root `README.md`: add a row to the Modules table with import path
 and purpose.
@@ -232,8 +242,17 @@ the repository's standard-library-first, sentinel-error (`errors.Is` /
 3. No credentials or production data in fixtures.
 4. Deterministic and safe under `-race`.
 
+Coverage is 100% of statements from the tests CI runs, which never include
+external services. Reach code that talks to a service through an internal
+interface and an in-memory fake (the s3 driver runs its full contract suite
+against a fake S3 client), and reach failures the OS cannot produce on demand
+(fsync, close, rename races) through an unexported seam over the few calls
+involved. Delete a branch no input can reach rather than leaving it
+uncovered. Never change the public API to make code testable.
+
 Completion criterion: tests cover the public contract and error handling
-without production services.
+without production services, and `make -C <module> tests coverage-check`
+reports `100.0%`.
 
 ## Validate the complete integration
 
@@ -254,8 +273,9 @@ jq empty <module>/.releaserc.json
 - no secret, API key, personal path, or temporary task context in files;
 - Markdown links resolve inside the repository unless they cite an external
   authoritative source;
-- `vendor/`, `coverage.out`, `node_modules/`, and `package.json` are absent
-  from the change;
+- `make -C <module> check` reported `<module> coverage: 100.0%`;
+- `vendor/`, `coverage.out`, `coverage.check.out`, `node_modules/`, and
+  `package.json` are absent from the change;
 - root and module documentation agree on import path and tag format.
 
 Completion criterion: every command passes, or the report names the exact
@@ -270,9 +290,9 @@ Report:
 3. Release tag format.
 4. Created files.
 5. Root files updated.
-6. Validation commands and results.
+6. Validation commands and results, including the coverage total.
 7. Skipped checks and why.
 
-The module is complete only when implementation, tests, release
-configuration, root registration, documentation, CI discovery, and
+The module is complete only when implementation, tests at 100% coverage,
+release configuration, root registration, documentation, CI discovery, and
 validation are all accounted for.

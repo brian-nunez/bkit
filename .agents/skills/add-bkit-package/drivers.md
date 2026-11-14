@@ -20,6 +20,10 @@ Differences from a top-level module:
 - The driver requires a released parent version. A driver change that needs
   an unreleased parent change ships in two steps: merge and release the
   parent, then bump the requirement in the driver.
+- The driver reaches 100% coverage without its backend. Wrap the client
+  library in an unexported interface and run the parent's contract suite
+  against an in-memory fake of it; tests against the real backend are extra,
+  skipped unless their environment variable is set.
 
 The parent defines the interface; the driver implements it and registers or
 constructs it. The parent never imports its drivers.
@@ -29,4 +33,6 @@ Go excludes a nested module from its parent's module zip, and
 parent and driver release independently.
 
 Completion criterion: `go list -m` in the driver prints its full module
-path, and `make check-components` passes with the driver after its parent.
+path, `make check-components` passes with the driver after its parent, and
+`make -C <parent>/drivers/<driver> check` reports 100.0% coverage with no
+backend running.

@@ -58,6 +58,9 @@ total size of stored objects.
 make -C objex/drivers/memory check
 ```
 
+`check` runs the objex contract suite and the driver's own tests, and
+`coverage-check` requires 100% statement coverage.
+
 ## Releases
 
 Released independently with tags of the form

@@ -29,6 +29,12 @@ templates, root registration, and validation steps.
   every bkit module it depends on, and a driver follows its parent.
 - **Errors** are sentinel values matched with `errors.Is` / `errors.As`;
   no panic-driven control flow.
+- **100% coverage.** Every module's tests reach 100% statement coverage
+  without external services; `coverage-check` enforces it in `make check`,
+  CI, and the pre-release gate. Reach external services through an internal
+  interface and an in-memory fake, delete unreachable branches, and never
+  change the public API for testability. `COVERAGE_EXCLUDE` is only for a
+  shared test-helper package such as `objex/objextest`.
 - **Docs.** `doc.go` carries the package comment (`//` lines): capability,
   ownership boundary, caller responsibilities, zero-value and concurrency
   behavior. Every exported identifier has godoc.
@@ -53,7 +59,8 @@ make doctor
 make check
 ```
 
-`make check` runs `check-components`, format check, lint, vet, and
-race-enabled tests for the root and every component. For one module:
-`make -C <module> check`. Release flow, recovery, and CI details live in
+`make check` runs `check-components`, format check, lint, vet, race-enabled
+tests, and `coverage-check` (100% statement coverage) for the root and every
+component. For one module: `make -C <module> check`; after `make -C <module>
+tests`, `make -C <module> coverage-check` lists any function below 100%. Release flow, recovery, and CI details live in
 `docs/development-and-release.md`.

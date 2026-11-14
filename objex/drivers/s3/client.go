@@ -160,6 +160,7 @@ type Client struct {
 	endpoint    string
 	partSize    int64
 	concurrency int
+	maxParts    int32
 }
 
 var _ objex.Manager = (*Client)(nil)
@@ -223,6 +224,7 @@ func newClient(a api, p presignAPI, region string, s settings) *Client {
 		endpoint:    s.endpoint,
 		partSize:    s.partSize,
 		concurrency: s.concurrency,
+		maxParts:    maxParts,
 	}
 }
 
