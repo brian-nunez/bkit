@@ -8,10 +8,9 @@ tags, so you import exactly the pieces you use.
 
 ## Modules
 
-No modules have been released yet. Each module is listed here as it lands.
-
 | Module | Import path | Purpose |
 | --- | --- | --- |
+| [objex](objex) | `github.com/brian-nunez/bkit/objex` | Backend-independent object storage API |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
