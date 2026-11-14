@@ -18,6 +18,7 @@ tags, so you import exactly the pieces you use.
 | [settings](settings) | `github.com/brian-nunez/bkit/settings` | Configuration loaded and merged from any number of sources |
 | [settings/drivers/yaml](settings/drivers/yaml) | `github.com/brian-nunez/bkit/settings/drivers/yaml` | YAML format for settings |
 | [settings/drivers/toml](settings/drivers/toml) | `github.com/brian-nunez/bkit/settings/drivers/toml` | TOML format for settings |
+| [settings/drivers/vault](settings/drivers/vault) | `github.com/brian-nunez/bkit/settings/drivers/vault` | settings sources for HashiCorp Vault key/value secrets |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
