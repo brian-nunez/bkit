@@ -1,0 +1,34 @@
+{
+  "extends": [
+    "bkit-commit-filter"
+  ],
+  "branches": [
+    "main",
+    {
+      "name": "beta",
+      "prerelease": true
+    }
+  ],
+  "tagFormat": "settings/drivers/yaml/v${version}",
+  "plugins": [
+    "bkit-commit-filter",
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "\"$(git rev-parse --show-toplevel)/scripts/check-go-module.sh\" v${nextRelease.version}",
+        "successCmd": "echo version=v${nextRelease.version} >> \"$GITHUB_OUTPUT\""
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "successComment": false,
+        "failComment": false,
+        "failTitle": false,
+        "releasedLabels": false
+      }
+    ]
+  ]
+}
