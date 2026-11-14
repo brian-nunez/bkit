@@ -1,7 +1,7 @@
 # COMPONENTS lists every independently versioned Go module, in release order:
 # a module follows every bkit module it depends on, and a driver follows its
 # parent.
-COMPONENTS = objex
+COMPONENTS = objex objex/drivers/memory objex/drivers/filesystem objex/drivers/s3
 
 REPOSITORY_ROOT := $(CURDIR)
 

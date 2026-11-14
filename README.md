@@ -11,6 +11,9 @@ tags, so you import exactly the pieces you use.
 | Module | Import path | Purpose |
 | --- | --- | --- |
 | [objex](objex) | `github.com/brian-nunez/bkit/objex` | Backend-independent object storage API |
+| [objex/drivers/memory](objex/drivers/memory) | `github.com/brian-nunez/bkit/objex/drivers/memory` | In-memory objex driver |
+| [objex/drivers/filesystem](objex/drivers/filesystem) | `github.com/brian-nunez/bkit/objex/drivers/filesystem` | objex driver for a local directory |
+| [objex/drivers/s3](objex/drivers/s3) | `github.com/brian-nunez/bkit/objex/drivers/s3` | objex driver for S3 and S3-compatible services |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
