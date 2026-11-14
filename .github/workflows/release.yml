@@ -77,7 +77,7 @@ jobs:
 
             packages=$(jq --compact-output --null-input --arg module "$MANUAL_MODULE" '[$module]')
           else
-            packages=$(make -s --no-print-directory get-all-release-packages)
+            packages=$(scripts/release-packages.sh "$REF_NAME")
           fi
 
           echo "packages to release: ${packages}"

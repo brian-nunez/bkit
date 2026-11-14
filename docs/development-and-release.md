@@ -101,7 +101,12 @@ checks.
 Releases are fully automated from Conventional Commits.
 
 1. A push to `main` or `beta` starts `release.yml`.
-2. `packages-to-release` validates `COMPONENTS` and emits it as the matrix.
+2. `packages-to-release` validates `COMPONENTS` and runs
+   `scripts/release-packages.sh`, which emits, in `COMPONENTS` order, only
+   the modules with a releasing commit since their last tag: a `feat`,
+   `fix`, `perf`, or `revert` commit, or a breaking change, touching the
+   module outside its nested modules. On `main` only stable tags count as
+   the last release.
 3. `release` processes one component at a time, in `COMPONENTS` order:
    1. builds the module (`make -C <module> build-actions`);
    2. links `.github/release/node_modules` and a temporary `package.json` into
@@ -118,7 +123,8 @@ Releases are fully automated from Conventional Commits.
       proxy.golang.org and sum.golang.org with an empty cache, checks the zip
       for release tooling, builds it, and confirms the checksum is stable.
 
-Modules with no relevant commits are skipped. No commit is ever pushed by a
+Modules with no releasing commits get no job. A manual run always
+evaluates the module it names. No commit is ever pushed by a
 release; changelogs live in GitHub Releases.
 
 ### Versions
