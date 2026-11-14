@@ -20,6 +20,7 @@ tags, so you import exactly the pieces you use.
 | [settings/drivers/toml](settings/drivers/toml) | `github.com/brian-nunez/bkit/settings/drivers/toml` | TOML format for settings |
 | [settings/drivers/vault](settings/drivers/vault) | `github.com/brian-nunez/bkit/settings/drivers/vault` | settings sources for HashiCorp Vault key/value secrets |
 | [settings/drivers/consul](settings/drivers/consul) | `github.com/brian-nunez/bkit/settings/drivers/consul` | settings sources for the HashiCorp Consul key/value store |
+| [rdb](rdb) | `github.com/brian-nunez/bkit/rdb` | One API over relational databases: pooling, placeholders, scanning, errors, transactions |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
