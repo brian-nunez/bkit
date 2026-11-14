@@ -1,0 +1,27 @@
+# Local Consul agent for the consul driver's integration tests.
+#
+#   docker compose -f settings/drivers/consul/docker-compose.yml up -d --wait
+#   SETTINGS_CONSUL_ADDR=http://localhost:8500 make -C settings/drivers/consul tests
+#   docker compose -f settings/drivers/consul/docker-compose.yml down
+#
+# Dev mode keeps everything in memory. ACLs deny by default so the tests can
+# check permission errors. The image is pinned by digest (Consul 2.1.0).
+services:
+  consul:
+    image: hashicorp/consul@sha256:259fd02f2544fe1aa03fa49efd3b105c8dd67106d710a72f5e898110266356f7
+    command: ["agent", "-dev", "-client=0.0.0.0"]
+    environment:
+      CONSUL_LOCAL_CONFIG: >-
+        {"acl": {"enabled": true, "default_policy": "deny",
+        "tokens": {"initial_management": "settingstest-root"}}}
+      CONSUL_HTTP_TOKEN: settingstest-root
+    ports:
+      - "8500:8500"
+    healthcheck:
+      test: ["CMD", "consul", "kv", "get", "-recurse"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
