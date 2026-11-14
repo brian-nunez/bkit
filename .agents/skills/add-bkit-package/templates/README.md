@@ -2,8 +2,6 @@
 
 __SUMMARY__
 
-<Ownership boundary: what this module owns and what callers keep.>
-
 ## Install
 
 ```shell

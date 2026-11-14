@@ -38,6 +38,11 @@ templates, root registration, and validation steps.
 - **Docs.** `doc.go` carries the package comment (`//` lines): capability,
   ownership boundary, caller responsibilities, zero-value and concurrency
   behavior. Every exported identifier has godoc.
+- **README prose** is plain and direct: short declarative sentences joined
+  by periods and commas. Say what the module does and how to use it, each
+  fact stated as what is true. Hard limits: no em dashes, no semicolons, no
+  ownership framing ("rdb owns ...", "callers supply ..."), and no
+  "not X, it's Y" contrasts.
 - **Commits** are Conventional Commits scoped by module path:
   `feat(<module>): ...`, `fix(<module>/drivers/<driver>): ...`. Repository-wide
   changes use `ci`, `build`, `docs`, or `chore` with a descriptive scope.

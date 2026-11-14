@@ -132,12 +132,14 @@ explicit.
 
 `<module>/README.md` covers:
 
-- purpose and ownership boundary;
-- import path `github.com/brian-nunez/bkit/<module>`;
-- initialization or primary usage example;
-- configuration and error behavior relevant to consumers;
-- validation commands;
-- release tag format `<module>/vX.Y.Z`.
+- purpose
+- import path `github.com/brian-nunez/bkit/<module>`
+- initialization or primary usage example
+- configuration and error behavior relevant to consumers
+- validation commands
+- release tag format `<module>/vX.Y.Z`
+
+Write it in the README prose style from `AGENTS.md`.
 
 Document only implemented behavior. Keep credentials, personal filesystem
 paths, and development-history language out of examples.
