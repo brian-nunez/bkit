@@ -58,6 +58,10 @@ the default of the same name:
 sqlite:app.db?_pragma=busy_timeout(1000)&_pragma=synchronous(NORMAL)
 ```
 
+`rdb.ReadOnly()` transactions turn on `PRAGMA query_only` for their
+duration, so a write inside one fails. The driver turns it off when the
+transaction ends.
+
 Writes in SQLite take turns. Under heavy write load, a write can still fail
 with `rdb.ErrRetryable` after the busy timeout.
 
