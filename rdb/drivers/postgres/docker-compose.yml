@@ -1,0 +1,25 @@
+# Local Postgres server for the postgres driver's integration tests.
+#
+#   docker compose -f rdb/drivers/postgres/docker-compose.yml up -d --wait
+#   RDB_POSTGRES_URL=postgres://rdbtest:rdbtest@localhost:55432/rdbtest?sslmode=disable make -C rdb/drivers/postgres tests
+#   docker compose -f rdb/drivers/postgres/docker-compose.yml down
+#
+# The data lives in the container and is discarded with it. The image is
+# pinned by digest (Postgres 18.7, Alpine).
+services:
+  postgres:
+    image: postgres@sha256:1018733457011bf88d81db98cf43aac6d5150afc18787dbe204771fedf80ff95
+    environment:
+      POSTGRES_USER: rdbtest
+      POSTGRES_PASSWORD: rdbtest
+      POSTGRES_DB: rdbtest
+    ports:
+      - "55432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "rdbtest", "-d", "rdbtest"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
