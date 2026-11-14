@@ -1,0 +1,45 @@
+version: "2"
+
+run:
+  timeout: 3m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - misspell
+    - nilerr
+    - noctx
+    - unconvert
+  settings:
+    staticcheck:
+      # "all" adds the stylecheck rules staticcheck disables by default,
+      # including ST1000 (package comment) and ST1020-ST1022 (godoc form).
+      checks:
+        - all
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    paths:
+      - vendor
+      - node_modules
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/brian-nunez/bkit
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - node_modules

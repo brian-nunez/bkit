@@ -1,0 +1,25 @@
+# Build and test artifacts
+vendor/
+coverage.out
+coverage.html
+
+# Repository-local tools (make tools)
+.tools/
+
+# Personal Go workspaces; make, CI, and releases run with GOWORK=off
+go.work
+go.work.sum
+
+# Release tooling lives only in .github/release. The release workflow links
+# package.json and node_modules into a module directory while it runs.
+node_modules/
+package.json
+package-lock.json
+!.github/release/package.json
+!.github/release/package-lock.json
+!.github/release/commit-filter/package.json
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/

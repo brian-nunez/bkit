@@ -1,0 +1,83 @@
+name: Linters
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      go-version: ${{ steps.versions.outputs.go-version }}
+      golangci-lint-version: ${{ steps.versions.outputs.golangci-lint-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Find Go modules
+        id: set-matrix
+        run: |
+          directories=$(find . -type f -name go.mod -not -path '*/vendor/*' -not -path '*/node_modules/*' -not -path './.tools/*' | sed -e 's|/go.mod$||' | LC_ALL=C sort | jq -R -s -c 'split("\n")[:-1]')
+          echo "matrix=${directories}" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned tool versions
+        id: versions
+        run: |
+          echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
+          echo "golangci-lint-version=$(make -s --no-print-directory print-required-golangci-lint-version)" >> "$GITHUB_OUTPUT"
+
+  golangci:
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.generate-matrix.outputs.go-version }}
+          cache: false
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOWORK: "off"
+        with:
+          version: v${{ needs.generate-matrix.outputs.golangci-lint-version }}
+          args: -v --timeout=3m --config=${{ github.workspace }}/.golangci.yml
+          working-directory: ${{ matrix.module }}
+
+  # Single required status check that stays stable as modules are added.
+  lint-result:
+    if: always()
+    needs: [generate-matrix, golangci]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check lint results
+        run: |
+          if [ "${{ needs.generate-matrix.result }}" != "success" ] || [ "${{ needs.golangci.result }}" != "success" ]; then
+            echo "Lint failed: generate-matrix=${{ needs.generate-matrix.result }}, golangci=${{ needs.golangci.result }}"
+            exit 1
+          fi

@@ -1,0 +1,7 @@
+{
+  "name": "bkit-commit-filter",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Scopes semantic-release commit analysis to one bkit module, excluding nested modules.",
+  "main": "index.cjs"
+}

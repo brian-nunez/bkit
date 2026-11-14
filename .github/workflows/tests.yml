@@ -1,0 +1,82 @@
+name: Code tests
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  merge_group:
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      go-version: ${{ steps.versions.outputs.go-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check component registration
+        run: scripts/check-components.sh
+
+      - name: Find components
+        id: set-matrix
+        run: echo "matrix=$(make -s --no-print-directory get-all-release-packages)" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned Go version
+        id: versions
+        run: echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
+
+  tests:
+    needs: generate-matrix
+    if: needs.generate-matrix.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.generate-matrix.outputs.go-version }}
+          cache-dependency-path: ${{ matrix.module }}/go.mod
+
+      - name: Run tests
+        run: make -C "${{ matrix.module }}" build-actions tests-actions
+
+  # Single required status check that stays stable as modules are added. A
+  # skipped tests job (no components yet) counts as success.
+  tests-result:
+    if: always()
+    needs: [generate-matrix, tests]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test results
+        run: |
+          if [ "${{ needs.generate-matrix.result }}" != "success" ]; then
+            echo "Matrix generation failed: ${{ needs.generate-matrix.result }}"
+            exit 1
+          fi
+          case "${{ needs.tests.result }}" in
+            success | skipped) ;;
+            *)
+              echo "Tests failed: ${{ needs.tests.result }}"
+              exit 1
+              ;;
+          esac

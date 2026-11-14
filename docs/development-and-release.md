@@ -1,0 +1,145 @@
+# Development and release
+
+How the bkit monorepo is built, checked, and released.
+
+## Repository model
+
+```text
+bkit/
+├── go.mod, doc.go          root module (documentation only, never released)
+├── Makefile                COMPONENTS registry and repo-wide targets
+├── make/development.mk     pinned versions, GOWORK=off, doctor, tools
+├── <module>/               an independently released module
+│   ├── go.mod              github.com/brian-nunez/bkit/<module>
+│   ├── Makefile            module targets (includes make/development.mk)
+│   ├── .releaserc.json     semantic-release config, tagFormat <module>/v${version}
+│   ├── drivers/<driver>/   nested driver modules, released separately
+│   └── examples/           optional unreleased example module
+├── scripts/                component, pre-release, and post-release checks
+└── .github/
+    ├── workflows/          commitlint, lint, tests, release
+    └── release/            pinned semantic-release tooling and bkit-commit-filter
+```
+
+`COMPONENTS` in the root `Makefile` is the single inventory of released
+modules, listed in release order. `scripts/check-components.sh` keeps it
+honest: every `go.mod` outside the root and `examples/` must be registered;
+every component needs `go.mod`, `Makefile`, `.releaserc.json`, `README.md`,
+and `doc.go`; module paths, `go` directives, and tag formats must match; and
+a driver must follow its parent.
+
+### Workspaces
+
+`make/development.mk` exports `GOWORK=off`, and CI and releases set it too.
+Each module therefore builds against the released versions in its own
+`go.mod`, exactly as a consumer does. A personal `go.work` (gitignored) can
+help an editor resolve cross-module code, but it never affects a check.
+
+### Cross-module changes
+
+A change that needs an unreleased change in another bkit module ships in two
+steps:
+
+1. Merge the dependency change; the release workflow tags it.
+2. Bump the requirement in the dependent module (`go get
+   github.com/brian-nunez/bkit/<dependency>@vX.Y.Z`) and merge.
+
+## Pinned versions
+
+| What | Where | Value |
+| --- | --- | --- |
+| Go toolchain for development and CI | `REQUIRED_GO_VERSION`, `make/development.mk` | 1.27.4 |
+| `go` directive in every `go.mod` | `GO_MOD_VERSION`, `make/development.mk` | 1.26.0 |
+| golangci-lint | `REQUIRED_GOLANGCI_LINT_VERSION`, `make/development.mk` | 2.15.0 |
+| semantic-release and plugins | `.github/release/package.json` | exact pins |
+| GitHub Actions | workflow files | full commit SHAs |
+
+Workflows read the Go and golangci-lint versions through
+`make print-required-go-version` and `make print-required-golangci-lint-version`,
+so changing `make/development.mk` changes CI. The `go` directive is the
+minimum Go version consumers need; keep it at the oldest supported Go
+release.
+
+## Continuous integration
+
+| Workflow | Runs on | Does |
+| --- | --- | --- |
+| `commitlint.yml` | pull requests | Lints commit messages and the PR title |
+| `lint.yml` | push to `main`, pull requests, merge queue | golangci-lint in every directory with a `go.mod`, including examples |
+| `tests.yml` | push to `main`, pull requests, merge queue | `check-components`, then `make -C <module> build-actions tests-actions` per component |
+| `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
+
+`lint-result` and `tests-result` aggregate their matrices into single checks
+that stay stable as modules are added; make those the required status
+checks.
+
+## Releases
+
+Releases are fully automated from Conventional Commits.
+
+1. A push to `main` or `beta` starts `release.yml`.
+2. `packages-to-release` validates `COMPONENTS` and emits it as the matrix.
+3. `release` processes one component at a time, in `COMPONENTS` order:
+   1. builds the module (`make -C <module> build-actions`);
+   2. links `.github/release/node_modules` and a temporary `package.json` into
+      the module directory and runs semantic-release there;
+   3. `bkit-commit-filter` limits commit analysis to that directory,
+      excluding nested modules, so only commits touching the module count;
+   4. with relevant commits, semantic-release computes the version and runs
+      `scripts/check-go-module.sh` (`prepareCmd`): module path matches the
+      major version, no `replace`, tidy `go.mod`, no tracked release tooling,
+      build, vet, and race tests;
+   5. semantic-release pushes the tag `<module>/vX.Y.Z` and creates a GitHub
+      Release with generated notes;
+   6. `scripts/verify-go-module.sh` resolves the new version through
+      proxy.golang.org and sum.golang.org with an empty cache, checks the zip
+      for release tooling, builds it, and confirms the checksum is stable.
+
+Modules with no relevant commits are skipped. No commit is ever pushed by a
+release; changelogs live in GitHub Releases.
+
+### Versions
+
+| Commits since the last tag | Next version |
+| --- | --- |
+| first release with a `feat` or `fix` | `v1.0.0` |
+| `fix` | patch |
+| `feat` | minor |
+| breaking change | major |
+
+Pushes to `beta` produce prereleases such as `<module>/v1.1.0-beta.1`, which Go
+resolves only when asked for explicitly. Merge `beta` into `main` to promote.
+
+### Major versions
+
+Go requires a module at v2 or later to end its path in `/vN`. Before merging
+a breaking change to a v1 module, change the module path (and every import of
+it inside bkit) to `github.com/brian-nunez/bkit/<module>/v2` in the same pull
+request. `check-go-module.sh` fails the release, before any tag exists, when
+the path and the major version disagree.
+
+## Recovering from a partial release
+
+Published versions are permanent: proxy.golang.org caches every version it
+has served. Never delete or move a tag that has been pushed; release a fix
+instead, and add a `retract` directive to `go.mod` for a version consumers
+must avoid.
+
+| Failure | State | Recovery |
+| --- | --- | --- |
+| `check-go-module.sh` (prepare) failed | No tag | Fix the cause and merge; the next push releases |
+| Tag pushed, GitHub Release missing | Tag exists, no release page | `gh release create <module>/vX.Y.Z --generate-notes --verify-tag` |
+| Proxy verification failed | Tag and release exist | Run `release.yml` manually with `module` and `version` to re-verify; an empty run means no new release, only verification |
+| One component failed, others released | Mixed | Fix and rerun `release.yml` manually for the failed `module`; dependents already reference published versions |
+| A broken version was published | Permanent | Release a fix, then retract the broken version with a `fix(<module>)` commit adding `retract vX.Y.Z` to `go.mod` |
+
+## Repository settings (configured on GitHub)
+
+These live in GitHub settings, not in files:
+
+- Pull requests: allow squash merging only; default the squash commit message
+  to the pull request title.
+- Branch protection on `main` and `beta`: require pull requests, the merge
+  queue, and the `lint-result`, `tests-result`, and `commitlint` checks.
+- Actions: workflow permissions read-only by default (`release.yml` requests
+  `contents: write` itself).

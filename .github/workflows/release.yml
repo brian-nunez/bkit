@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - beta
+  workflow_dispatch:
+    inputs:
+      module:
+        description: Module directory to evaluate for release (a COMPONENTS entry, e.g. <module> or <module>/drivers/<driver>)
+        required: true
+        type: string
+      version:
+        description: Existing Go module version to verify when no new release is created
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  packages-to-release:
+    runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.find-packages.outputs.packages }}
+      go-version: ${{ steps.versions.outputs.go-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check component registration
+        run: scripts/check-components.sh
+
+      - name: Find packages to release
+        id: find-packages
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          MANUAL_MODULE: ${{ inputs.module }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            case "$REF_NAME" in
+              main | beta) ;;
+              *)
+                echo "Manual releases must run from main or beta; selected ref: $REF_NAME" >&2
+                exit 1
+                ;;
+            esac
+
+            case "$MANUAL_MODULE" in
+              "" | /* | *..* | *[!a-z0-9_/-]* | [!a-z]*)
+                echo "Invalid module directory: $MANUAL_MODULE" >&2
+                exit 1
+                ;;
+            esac
+
+            if [ ! -f "$MANUAL_MODULE/go.mod" ] || [ ! -f "$MANUAL_MODULE/.releaserc.json" ]; then
+              echo "Module must contain go.mod and .releaserc.json: $MANUAL_MODULE" >&2
+              exit 1
+            fi
+
+            if ! make -s --no-print-directory get-all-release-packages | jq -e --arg module "$MANUAL_MODULE" 'index($module) != null' > /dev/null; then
+              echo "Module is not registered in COMPONENTS: $MANUAL_MODULE" >&2
+              exit 1
+            fi
+
+            packages=$(jq --compact-output --null-input --arg module "$MANUAL_MODULE" '[$module]')
+          else
+            packages=$(make -s --no-print-directory get-all-release-packages)
+          fi
+
+          echo "packages to release: ${packages}"
+          echo "packages=${packages}" >> "$GITHUB_OUTPUT"
+
+      - name: Read pinned Go version
+        id: versions
+        run: echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: packages-to-release
+    if: needs.packages-to-release.outputs.packages != '[]'
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    strategy:
+      # COMPONENTS order is release order: a dependency is tagged before the
+      # modules that use it.
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        package: ${{ fromJSON(needs.packages-to-release.outputs.packages) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.packages-to-release.outputs.go-version }}
+          cache: false
+
+      - name: Build module
+        run: make -C "${{ matrix.package }}" build-actions
+
+      - name: Install release dependencies
+        working-directory: .github/release
+        run: npm ci --no-audit --fund=false
+
+      - name: Run semantic release
+        id: release
+        working-directory: ${{ matrix.package }}
+        env:
+          PACKAGE: ${{ matrix.package }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test ! -e node_modules
+          test ! -e package.json
+          release_dir=$(mktemp -d)
+          RELEASE_PACKAGE_JSON="$release_dir/package.json"
+          export RELEASE_PACKAGE_JSON
+          trap 'rm -f node_modules package.json; rm -rf "$release_dir"' EXIT
+          jq --null-input --arg name "$PACKAGE" '{name: $name, private: true}' > "$RELEASE_PACKAGE_JSON"
+          ln -s "$RELEASE_PACKAGE_JSON" package.json
+          ln -s "$GITHUB_WORKSPACE/.github/release/node_modules" node_modules
+          "$GITHUB_WORKSPACE/.github/release/node_modules/.bin/semantic-release"
+
+      - name: Verify published module from proxy.golang.org
+        if: ${{ steps.release.outputs.version != '' || inputs.version != '' }}
+        working-directory: ${{ matrix.package }}
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version || inputs.version }}
+        run: '"$GITHUB_WORKSPACE/scripts/verify-go-module.sh" "$RELEASE_VERSION"'

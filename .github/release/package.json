@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "overrides": {
+    "@actions/http-client": {
+      "undici": "6.27.0"
+    },
+    "@semantic-release/github": {
+      "undici": "7.29.0"
+    }
+  },
+  "dependencies": {
+    "@semantic-release/exec": "7.1.0",
+    "bkit-commit-filter": "file:./commit-filter",
+    "npm": "11.18.0",
+    "semantic-release": "25.0.8"
+  }
+}
