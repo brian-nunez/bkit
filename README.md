@@ -26,6 +26,7 @@ tags, so you import exactly the pieces you use.
 | [rdb/drivers/mysql](rdb/drivers/mysql) | `github.com/brian-nunez/bkit/rdb/drivers/mysql` | rdb driver for MySQL and MariaDB |
 | [stash](stash) | `github.com/brian-nunez/bkit/stash` | One API over key-value stores, with expiry, atomic operations, and typed values |
 | [stash/drivers/memory](stash/drivers/memory) | `github.com/brian-nunez/bkit/stash/drivers/memory` | In-process stash store |
+| [stash/drivers/database](stash/drivers/database) | `github.com/brian-nunez/bkit/stash/drivers/database` | stash store in a SQL database opened with rdb |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
