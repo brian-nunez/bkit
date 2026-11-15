@@ -306,3 +306,39 @@ type nopConn struct{}
 func (nopConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("unsupported") }
 func (nopConn) Close() error                        { return nil }
 func (nopConn) Begin() (driver.Tx, error)           { return nil, errors.New("unsupported") }
+
+func TestSubMillisecondTTL(t *testing.T) {
+	ctx := context.Background()
+	b, _ := newBackend(t, "")
+	now := time.Now()
+	b.now = func() time.Time { return now }
+
+	short := stash.SetOptions{TTL: 900 * time.Microsecond, IfNotExists: true}
+	if err := b.Set(ctx, "lock", []byte("a"), short); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Set(ctx, "lock", []byte("b"), short); !errors.Is(err, stash.ErrExists) {
+		t.Fatalf("second Set with IfNotExists = %v, want ErrExists", err)
+	}
+	if d, err := b.TTL(ctx, "lock"); err != nil || d != time.Millisecond {
+		t.Fatalf("TTL after Set = %v, %v; want 1ms", d, err)
+	}
+
+	if err := b.Set(ctx, "k", []byte("v"), stash.SetOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Expire(ctx, "k", time.Nanosecond); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := b.TTL(ctx, "k"); err != nil || d != time.Millisecond {
+		t.Fatalf("TTL after Expire = %v, %v; want 1ms", d, err)
+	}
+
+	// Like the redis and valkey drivers, longer TTLs keep whole milliseconds.
+	if err := b.Expire(ctx, "k", 1900*time.Microsecond); err != nil {
+		t.Fatal(err)
+	}
+	if d, err := b.TTL(ctx, "k"); err != nil || d != time.Millisecond {
+		t.Fatalf("TTL after Expire(1.9ms) = %v, %v; want 1ms", d, err)
+	}
+}
