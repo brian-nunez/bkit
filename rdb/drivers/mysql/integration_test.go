@@ -25,7 +25,8 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer db.Close()
+	// Registered first, so it runs after the table cleanup below.
+	t.Cleanup(func() { _ = db.Close() })
 
 	setup := []string{
 		"DROP TABLE IF EXISTS rdb_kids, rdb_parents",
