@@ -67,6 +67,51 @@ func TestDSN(t *testing.T) {
 	}
 }
 
+func TestDSNParamValues(t *testing.T) {
+	params := map[string]string{
+		"charset":     "utf8mb4,utf8",
+		"collation":   "utf8mb4_unicode_ci",
+		"readTimeout": "500µs",
+		"timeout":     "1m30s",
+		"loc":         "America/New_York",
+		"tls":         "skip-verify",
+		"time_zone":   "'+00:00'",
+		"sql_mode":    "'STRICT_ALL_TABLES,NO_ZERO_DATE'",
+		"init":        "a&b=c%d e/f?g#h",
+	}
+	q := url.Values{}
+	for k, v := range params {
+		q.Set(k, v)
+	}
+	for _, u := range []*url.URL{
+		{Scheme: "mysql", Host: "db", Path: "/app", RawQuery: q.Encode()},
+		Config{Host: "db", Database: "app", Params: params}.url(),
+	} {
+		got := dsn(u)
+		cfg, err := mysql.ParseDSN(got)
+		if err != nil {
+			t.Fatalf("ParseDSN(%q): %v", got, err)
+		}
+		if cfg.DBName != "app" || cfg.Addr != "db:3306" {
+			t.Errorf("db %q addr %q", cfg.DBName, cfg.Addr)
+		}
+		// The parsed charset list is unexported; FormatDSN writes it back.
+		if !strings.Contains(cfg.FormatDSN(), "charset=utf8mb4,utf8") {
+			t.Errorf("charset lost: %q", cfg.FormatDSN())
+		}
+		if cfg.Collation != "utf8mb4_unicode_ci" || cfg.ReadTimeout != 500*time.Microsecond ||
+			cfg.Timeout != 90*time.Second || cfg.Loc.String() != "America/New_York" || cfg.TLSConfig != "skip-verify" {
+			t.Errorf("config = collation %q readTimeout %v timeout %v loc %v tls %q",
+				cfg.Collation, cfg.ReadTimeout, cfg.Timeout, cfg.Loc, cfg.TLSConfig)
+		}
+		for _, k := range []string{"time_zone", "sql_mode", "init"} {
+			if cfg.Params[k] != params[k] {
+				t.Errorf("param %s = %q, want %q", k, cfg.Params[k], params[k])
+			}
+		}
+	}
+}
+
 func TestConfigURL(t *testing.T) {
 	tests := []struct {
 		cfg  Config
