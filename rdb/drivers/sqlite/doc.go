@@ -17,7 +17,10 @@
 // overrides a default.
 //
 // A read-only transaction, started with rdb.ReadOnly, turns on PRAGMA
-// query_only until it ends, so a write inside it fails.
+// query_only until it ends, so a write inside it fails. SQLite transactions
+// are serializable, so rdb.Isolation accepts every level up to
+// sql.LevelSerializable, including sql.LevelSnapshot, and fails for
+// sql.LevelWriteCommitted and sql.LevelLinearizable.
 //
 // Errors match rdb.ErrUniqueViolation, rdb.ErrForeignKeyViolation,
 // rdb.ErrNotNullViolation, rdb.ErrCheckViolation, and, for a busy or locked
