@@ -600,6 +600,23 @@ func TestPutTooManyParts(t *testing.T) {
 	}
 }
 
+func TestPutExactlyMaxParts(t *testing.T) {
+	ctx := context.Background()
+	c, fake, b := fakeBucketClient(t)
+	c.maxParts = 2
+
+	info, err := b.Put(ctx, "full", &sizedReader{n: 2 * minPartSize})
+	if err != nil || !strings.HasSuffix(info.ETag, "-2") || info.Size != 2*minPartSize {
+		t.Errorf("body of exactly maxParts parts = %+v, %v; want a 2-part upload", info, err)
+	}
+	if _, err := b.Put(ctx, "failing", &sizedReader{n: 2 * minPartSize, err: errRead}); !errors.Is(err, errRead) {
+		t.Errorf("read error after maxParts parts: err = %v, want the read error", err)
+	}
+	if len(fake.uploads) != 0 {
+		t.Errorf("%d multipart uploads left open", len(fake.uploads))
+	}
+}
+
 // blockingS3 holds the first UploadPart until the request is canceled, then
 // reports success, so cancellation is observed by the upload loop itself.
 type blockingS3 struct {
