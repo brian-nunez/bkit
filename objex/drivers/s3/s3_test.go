@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -259,6 +260,12 @@ func TestHelpers(t *testing.T) {
 	}
 	if got := rangeHeader(objex.Range{Offset: 5, Length: -1}); got != "bytes=5-" {
 		t.Errorf("rangeHeader to end = %q", got)
+	}
+	if got := rangeHeader(objex.Range{Offset: 2, Length: math.MaxInt64}); got != "bytes=2-" {
+		t.Errorf("rangeHeader with a huge length = %q, want %q", got, "bytes=2-")
+	}
+	if got := rangeHeader(objex.Range{Offset: 0, Length: math.MaxInt64}); got != fmt.Sprintf("bytes=0-%d", int64(math.MaxInt64-1)) {
+		t.Errorf("rangeHeader with the largest length that fits = %q", got)
 	}
 	if total, ok := totalFromContentRange("bytes 0-9/1234"); !ok || total != 1234 {
 		t.Errorf("totalFromContentRange = %d, %v", total, ok)

@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
+	"math"
 	"os"
 	"strings"
 	"testing"
@@ -167,6 +168,23 @@ func TestIntegrationMultipart(t *testing.T) {
 	exact := bytes.Repeat([]byte("x"), 5<<20)
 	if info, err := b.Put(ctx, "exact.bin", hidden{bytes.NewReader(exact)}); err != nil || strings.Contains(info.ETag, "-") {
 		t.Errorf("Put of exactly one part = %+v, %v; want a single-request upload", info, err)
+	}
+}
+
+func TestIntegrationRangeHugeLength(t *testing.T) {
+	b := newIntegrationBucket(t)
+	ctx := context.Background()
+	if _, err := b.Put(ctx, "k", strings.NewReader("abcdef")); err != nil {
+		t.Fatal(err)
+	}
+	obj, err := b.Get(ctx, "k", objex.WithRange(2, math.MaxInt64))
+	if err != nil {
+		t.Fatalf("Get with a huge range length: %v", err)
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil || string(data) != "cdef" {
+		t.Errorf("Get with a huge range length = %q, %v; want %q", data, err, "cdef")
 	}
 }
 
