@@ -262,7 +262,9 @@ func (b *Bucket) Get(ctx context.Context, key string, opts ...objex.GetOption) (
 				fmt.Errorf("offset %d is at or beyond the object size %d", o.Range.Offset, size))
 		}
 		end := size
-		if o.Range.Length > 0 && o.Range.Offset+o.Range.Length < size {
+		// Compare against the remaining bytes so a huge Length cannot
+		// overflow Offset+Length; it reads to the end of the object.
+		if o.Range.Length > 0 && o.Range.Length < size-o.Range.Offset {
 			end = o.Range.Offset + o.Range.Length
 		}
 		data = data[o.Range.Offset:end]

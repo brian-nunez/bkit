@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -234,6 +236,23 @@ func TestCopyInvalidOption(t *testing.T) {
 	_, err := b.Copy(context.Background(), "dst", "src", objex.WithMetadata(map[string]string{"bad key": "v"}))
 	if !errors.Is(err, objex.ErrInvalidOption) {
 		t.Errorf("Copy with invalid metadata: err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestGetRangeHugeLength(t *testing.T) {
+	b := newBucket(t)
+	ctx := context.Background()
+	if _, err := b.Put(ctx, "k", strings.NewReader("abcdef")); err != nil {
+		t.Fatal(err)
+	}
+	obj, err := b.Get(ctx, "k", objex.WithRange(1, math.MaxInt64))
+	if err != nil {
+		t.Fatalf("Get with a huge range length: %v", err)
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil || string(data) != "bcdef" {
+		t.Errorf("Get with a huge range length = %q, %v; want %q", data, err, "bcdef")
 	}
 }
 
