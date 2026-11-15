@@ -702,7 +702,9 @@ func (b *Bucket) collect(ctx context.Context, prefix string) ([]objex.ObjectInfo
 	var entries []objex.ObjectInfo
 	err := fs.WalkDir(b.client.root.FS(), start, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			if p == start && errors.Is(err, fs.ErrNotExist) {
+			// A missing start, or one below an object (ENOTDIR), holds no
+			// keys with the prefix.
+			if p == start && (errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)) {
 				return fs.SkipAll
 			}
 			return err

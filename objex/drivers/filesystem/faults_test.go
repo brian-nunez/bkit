@@ -771,6 +771,17 @@ func TestListFailures(t *testing.T) {
 		}
 	})
 
+	t.Run("PrefixBelowObject", func(t *testing.T) {
+		c, _, _ := faultClient(t)
+		b := c.Bucket("bucket")
+		put(t, b, "a", "x")
+		for _, prefix := range []string{"a/", "a/b/", "a/b/c"} {
+			for info, err := range b.List(ctx, objex.WithPrefix(prefix)) {
+				t.Errorf("List(%q) yielded %q, %v; want nothing", prefix, info.Key, err)
+			}
+		}
+	})
+
 	t.Run("SkipsInvalidKeysOnDisk", func(t *testing.T) {
 		c, _, dir := faultClient(t)
 		b := c.Bucket("bucket")
