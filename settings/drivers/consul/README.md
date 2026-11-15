@@ -60,6 +60,10 @@ trailing `/` on the prefix is optional.
 | `consul.WithNamespace(ns)` | Reads from namespace `ns` |
 | `consul.WithHTTPClient(c)` | Uses `c` for requests, for example to trust a private CA |
 
+With a token set, redirects to another host or from https to http are not
+followed, and the redirect is reported as `consul.ErrResponse`. A client
+passed to `WithHTTPClient` with its own `CheckRedirect` keeps that policy.
+
 ## Cancellation
 
 Requests use the context passed to `settings.Load`. Canceling it stops the

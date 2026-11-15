@@ -57,6 +57,10 @@ func WithNamespace(namespace string) Option {
 
 // WithHTTPClient sets the HTTP client used for requests, for example to
 // trust a private certificate authority. The default is http.DefaultClient.
+// When a token is set and the client has no CheckRedirect of its own, the
+// Client uses a copy of it that does not follow redirects to another host
+// or from https to http. A client with its own CheckRedirect is used as
+// is.
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *Client) { c.http = client }
 }
@@ -80,7 +84,29 @@ func New(address string, opts ...Option) (*Client, error) {
 	for _, opt := range opts {
 		opt(c)
 	}
+	if c.token != "" && c.http.CheckRedirect == nil {
+		hc := *c.http
+		hc.CheckRedirect = checkRedirect
+		c.http = &hc
+	}
 	return c, nil
+}
+
+// maxRedirects matches the limit of net/http's default redirect policy.
+const maxRedirects = 10
+
+// checkRedirect keeps the token on the original host. It stops at a
+// redirect to another host or from https to http and returns the redirect
+// response instead. Other redirects follow net/http's default policy.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	first := via[0].URL
+	if req.URL.Host != first.Host || (first.Scheme == "https" && req.URL.Scheme != "https") {
+		return http.ErrUseLastResponse
+	}
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("stopped after %d redirects", maxRedirects)
+	}
+	return nil
 }
 
 // Key returns a settings.Source that reads one key whose value is a whole
