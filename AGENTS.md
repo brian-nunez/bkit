@@ -43,9 +43,6 @@ templates, root registration, and validation steps.
   fact stated as what is true. Hard limits: no em dashes, no semicolons, no
   ownership framing ("rdb owns ...", "callers supply ..."), and no
   "not X, it's Y" contrasts.
-- **Commits** are Conventional Commits scoped by module path:
-  `feat(<module>): ...`, `fix(<module>/drivers/<driver>): ...`. Repository-wide
-  changes use `ci`, `build`, `docs`, or `chore` with a descriptive scope.
 - **Tags come only from the release workflow.** A breaking change that
   crosses v2 must change the module path to `/vN` in the same commit;
   `scripts/check-go-module.sh` blocks the release otherwise.
@@ -69,3 +66,67 @@ tests, and `coverage-check` (100% statement coverage) for the root and every
 component. For one module: `make -C <module> check`; after `make -C <module>
 tests`, `make -C <module> coverage-check` lists any function below 100%. Release flow, recovery, and CI details live in
 `docs/development-and-release.md`.
+
+## Commits
+
+Every commit follows [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.0/),
+and commitlint checks it in CI. Pull requests are squash-merged, so the pull
+request title becomes the commit the release tooling reads.
+
+```text
+<type>(<scope>): <summary>
+
+<body>
+
+<footers>
+```
+
+*   **Type**: `feat` (new behavior), `fix` (corrected behavior), `docs`,
+    `refactor` (no behavior change), `perf`, `test`, `build`, `ci`, `style`
+    (formatting only), `chore`, `revert`. In a module, `feat` releases a minor
+    version, `fix`, `perf`, and `revert` a patch, and the rest nothing.
+*   **Scope**: the module path, `<module>` or `<module>/drivers/<driver>`.
+    Repository-wide changes use `ci`, `build`, `docs`, or `chore` with a
+    descriptive scope such as `release`, `readme`, or `coverage`.
+*   **Summary**: imperative mood, lowercase, no trailing period, 72
+    characters or fewer. It names the change in behavior:
+    `fix(<module>): reject empty keys`, not `fix(<module>): update keys.go`.
+*   **Body**: required unless the summary alone tells a reviewer everything.
+    Wrap at 72 columns (commitlint rejects body lines over 100). State:
+    *   **Why**: the problem, bug, or need that prompted the change.
+    *   **What**: the approach, and what now behaves differently.
+    *   **Impact**: anything a reader must know: follow-up releases,
+        configuration changes, trade-offs taken.
+
+    Every sentence carries information a reviewer cannot get from the diff.
+*   **Footers**: `BREAKING CHANGE: <what breaks and how to migrate>` for
+    incompatible changes (and `!` after the type or scope); a breaking change
+    past v1 also changes the module path to `/vN`. `Refs: #<issue>` or
+    `Closes: #<issue>` for tracked work.
+*   One logical change per commit, and one module per pull request where
+    possible: a squash merge that touches several modules releases each of
+    them with the same type.
+
+## Decisions
+
+Decisions that are costly to reverse are recorded in [`docs/adr/`](docs/adr/README.md)
+as MADR records, and get a record before implementation. Start from
+[`docs/adr/adr-template.md`](docs/adr/adr-template.md) and add the record to
+the index.
+
+## Skills
+
+*   `add-bkit-package` (`.agents/skills/add-bkit-package/SKILL.md`): adding
+    any new module or driver.
+
+## Boundaries
+
+*   `vendor/`, `coverage.out`, `coverage.check.out`, and `.tools/` are build
+    output: never edit or commit them.
+*   `go.sum` changes only through `go mod tidy` or `go get`.
+*   Tags and GitHub Releases come only from the release workflow. Recovering
+    a partial release follows `docs/development-and-release.md` and needs
+    Brian's approval.
+*   A new direct dependency in any module needs Brian's approval.
+*   Pull requests are merged by Brian. Driver pull requests that need an
+    unreleased parent wait for the parent's release before leaving draft.

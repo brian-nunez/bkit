@@ -55,8 +55,8 @@
   dependencies live in driver modules, so an application installs only the
   clients it needs.
 - **Tested.** Every module reaches 100% statement coverage from its own tests,
-  with no external services. Drivers also run a shared conformance suite, so
-  they behave the same for the same calls.
+  with no external services. objex and stash drivers also run a shared
+  conformance suite, so they behave the same for the same calls.
 - **Released.** Versions follow Semantic Versioning and are cut automatically
   from Conventional Commits, one module at a time.
 
@@ -145,6 +145,8 @@ if err != nil {
 }
 ```
 
+Passing several drivers does not open several databases. The URL's scheme
+picks one driver, and only that driver connects, so
 `APP_DATABASE__URL=postgres://...` switches the same binary to Postgres once
 the postgres driver is passed to `rdb.Open`.
 
@@ -217,7 +219,9 @@ port, err := settings.Get[int](cfg, "server.port")
 
 ### rdb
 
-Write `?` placeholders on every database, and scan rows into structs:
+The URL's scheme picks one of the drivers passed in, and only that driver
+connects. Write `?` placeholders on every database, and scan rows into
+structs:
 
 ```go
 db, err := rdb.Open(ctx, os.Getenv("DATABASE_URL"), sqlite.Driver(), postgres.Driver())
