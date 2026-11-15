@@ -295,6 +295,10 @@ func (f *fakeS3) CopyObject(ctx context.Context, in *s3.CopyObjectInput, _ ...fu
 	if in.CopySourceIfMatch != nil && aws.ToString(in.CopySourceIfMatch) != src.etag {
 		return nil, apiError("PreconditionFailed")
 	}
+	// S3 rejects copying an object onto itself without replacing anything.
+	if srcBucket == aws.ToString(in.Bucket) && srcKey == aws.ToString(in.Key) && in.MetadataDirective != types.MetadataDirectiveReplace {
+		return nil, apiError("InvalidRequest")
+	}
 	dst, err := f.bucket(aws.ToString(in.Bucket))
 	if err != nil {
 		return nil, err
@@ -676,6 +680,33 @@ func TestBucketOperationsOnMissingBucket(t *testing.T) {
 		if !errors.Is(err, objex.ErrBucketNotFound) {
 			t.Errorf("List: err = %v, want ErrBucketNotFound", err)
 		}
+	}
+}
+
+func TestCopyOntoItself(t *testing.T) {
+	ctx := context.Background()
+	_, _, b := fakeBucketClient(t)
+	put, err := b.Put(ctx, "same", strings.NewReader("data"), objex.WithContentType("text/plain"), objex.WithMetadata(map[string]string{"a": "1"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := b.Copy(ctx, "same", "same")
+	if err != nil {
+		t.Fatalf("Copy onto itself: %v", err)
+	}
+	if info.Key != "same" || info.Size != 4 || info.ETag != put.ETag || info.ContentType != "text/plain" || info.Metadata["a"] != "1" || len(info.Metadata) != 1 {
+		t.Errorf("Copy onto itself = %+v", info)
+	}
+	stat, err := b.Stat(ctx, "same")
+	if err != nil || stat.ContentType != "text/plain" || stat.Metadata["a"] != "1" || len(stat.Metadata) != 1 {
+		t.Errorf("Stat after copy onto itself = %+v, %v", stat, err)
+	}
+	if _, err := b.Copy(ctx, "same", "same", objex.WithContentType("application/json")); err != nil {
+		t.Errorf("Copy onto itself with a new content type: %v", err)
+	}
+	if stat, err := b.Stat(ctx, "same"); err != nil || stat.ContentType != "application/json" || stat.Metadata["a"] != "1" {
+		t.Errorf("Stat after a content-type copy onto itself = %+v, %v", stat, err)
 	}
 }
 

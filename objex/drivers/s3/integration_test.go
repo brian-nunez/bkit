@@ -214,6 +214,25 @@ func TestIntegrationMissingBucket(t *testing.T) {
 	}
 }
 
+func TestIntegrationCopyOntoItself(t *testing.T) {
+	b := newIntegrationBucket(t)
+	ctx := context.Background()
+	if _, err := b.Put(ctx, "same", strings.NewReader("data"), objex.WithContentType("text/plain"), objex.WithMetadata(map[string]string{"a": "1"})); err != nil {
+		t.Fatal(err)
+	}
+	info, err := b.Copy(ctx, "same", "same")
+	if err != nil {
+		t.Fatalf("Copy onto itself: %v", err)
+	}
+	if info.Key != "same" || info.Size != 4 || info.ContentType != "text/plain" || info.Metadata["a"] != "1" {
+		t.Errorf("Copy onto itself = %+v", info)
+	}
+	stat, err := b.Stat(ctx, "same")
+	if err != nil || stat.ETag != info.ETag || stat.ContentType != "text/plain" || stat.Metadata["a"] != "1" || len(stat.Metadata) != 1 {
+		t.Errorf("Stat after copy onto itself = %+v, %v; Copy returned %+v", stat, err, info)
+	}
+}
+
 // hidden hides every method but Read so the driver cannot learn the size.
 type hidden struct{ r io.Reader }
 
