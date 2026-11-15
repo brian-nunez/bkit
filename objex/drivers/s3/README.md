@@ -83,9 +83,10 @@ Caveats:
 - `Put` returns `LastModified` as the time the write completed on the
   client, because S3 does not report it; `Stat`, `Get`, and `List` report the
   server's value.
-- `Stat` on a key in a missing bucket returns `objex.ErrNotFound`: S3 answers
-  `HEAD` requests without a code that tells the two apart. `Put`, `Get`,
-  `Delete`, and `List` return `objex.ErrBucketNotFound`.
+- Every operation on a missing bucket returns `objex.ErrBucketNotFound`.
+  S3 answers `HEAD` requests without an error code, so when `Stat` or `Copy`
+  finds no object, the driver sends one `HeadBucket` request to tell a
+  missing bucket from a missing key.
 - Multipart ETags (`"<hash>-<parts>"`) are not content hashes.
 
 ## Capabilities

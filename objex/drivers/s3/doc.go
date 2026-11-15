@@ -17,7 +17,10 @@
 //
 // S3 does not report the modification time of a write in its response, so
 // ObjectInfo.LastModified returned by Put is the time the write completed on
-// the client; Stat, Get, and List report the server's value. Stat on a key in
-// a bucket that does not exist returns objex.ErrNotFound, because S3 answers
-// HEAD requests without an error code that distinguishes the two.
+// the client; Stat, Get, and List report the server's value.
+//
+// Every operation on a bucket that does not exist returns
+// objex.ErrBucketNotFound. S3 answers HEAD requests without an error code,
+// so when Stat or Copy finds no object, the driver sends one HeadBucket
+// request to tell a missing bucket from a missing key.
 package s3
