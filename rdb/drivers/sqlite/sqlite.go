@@ -26,8 +26,9 @@ const memoryName = "file:bkit-rdb-memory-"
 
 // Config describes a SQLite database for Open.
 type Config struct {
-	// Path is the database file, created if missing. An empty path or
-	// ":memory:" opens a private in-memory database.
+	// Path is the database file, created if missing. An empty path,
+	// ":memory:", or a file: URI that SQLite opens in memory, such as
+	// "file::memory:", opens an in-memory database.
 	Path string
 }
 
@@ -94,16 +95,16 @@ func (sqliteDriver) Classify(err error) error {
 // connection builds the Connection for path. A _pragma in params replaces
 // the default pragma of the same name.
 func connection(path string, params url.Values) rdb.Connection {
-	inMemory := path == "" || path == memory
-	defaults := []string{"foreign_keys(1)", "busy_timeout(5000)"}
-	if !inMemory {
-		defaults = append(defaults, "journal_mode(WAL)")
-	}
 	q := url.Values{}
 	for k, vs := range params {
 		q[k] = vs
 	}
-	if inMemory {
+	inMemory, shared := memoryDB(path, q)
+	defaults := []string{"foreign_keys(1)", "busy_timeout(5000)"}
+	if !inMemory {
+		defaults = append(defaults, "journal_mode(WAL)")
+	}
+	if inMemory && !shared {
 		// A private in-memory database belongs to the one connection that
 		// opened it and vanishes when the pool closes that connection. A
 		// uniquely named shared-cache memory database stores data the same
@@ -120,11 +121,49 @@ func connection(path string, params url.Values) rdb.Connection {
 	}
 	conn := rdb.Connection{Connector: &connector{dsn: path + "?" + q.Encode(), keepAlive: inMemory}}
 	if inMemory {
+		// The pool keeps one connection to every in-memory database.
 		// Connections that share a cache lock whole tables against each
-		// other, so the pool keeps one.
+		// other.
 		conn.MaxOpenConns = 1
 	}
 	return conn
+}
+
+// memoryDB reports whether path and q, read the way SQLite reads them, open
+// an in-memory database, and whether every connection that opens the same
+// name shares it. SQLite reads mode and cache only from a file: URI, where
+// the last value of a parameter wins, and the memdb VFS shares a database
+// whose name starts with "/".
+func memoryDB(path string, q url.Values) (inMemory, shared bool) {
+	name, uri := strings.CutPrefix(path, "file:")
+	var mode, cache string
+	if uri {
+		if authority, ok := strings.CutPrefix(name, "//"); ok {
+			name = ""
+			if i := strings.IndexByte(authority, '/'); i >= 0 {
+				name = authority[i:]
+			}
+		}
+		if decoded, err := url.PathUnescape(name); err == nil {
+			name = decoded
+		}
+		mode, cache = last(q["mode"]), last(q["cache"])
+	}
+	switch {
+	case path == "" || name == memory || mode == "memory":
+		return true, cache == "shared"
+	case last(q["vfs"]) == "memdb":
+		return true, cache == "shared" || strings.HasPrefix(name, "/")
+	}
+	return false, false
+}
+
+// last returns the last of vs, or "" when vs is empty.
+func last(vs []string) string {
+	if len(vs) == 0 {
+		return ""
+	}
+	return vs[len(vs)-1]
 }
 
 // pragmaName returns the lowercased name of a _pragma value such as
