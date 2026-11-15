@@ -46,6 +46,28 @@ var (
 	// ErrInvalidOption reports an option value that is out of range or
 	// conflicts with another option or with the database.
 	ErrInvalidOption = errors.New("rdb: invalid option")
+
+	// ErrInvalidMigration reports a migration source that cannot run: a file
+	// name that does not follow the naming rules, two files for one version
+	// and dialect, a version with no file for the database's dialect, a
+	// misused directive, or no migrations at all.
+	ErrInvalidMigration = errors.New("rdb: invalid migration")
+
+	// ErrMigrationChanged reports an applied migration whose file has
+	// changed since it ran. Add a new migration instead of editing one that
+	// has run.
+	ErrMigrationChanged = errors.New("rdb: migration changed")
+
+	// ErrMigrationMismatch reports a database whose applied migrations do
+	// not fit the source: an applied migration is missing from the source,
+	// as when an older build starts after a newer one migrated, or a pending
+	// migration sorts before one that has run.
+	ErrMigrationMismatch = errors.New("rdb: migration mismatch")
+
+	// ErrMigrationDirty reports a migration that started but did not finish
+	// on a database that cannot roll it back, so the schema may be partly
+	// changed. Repair the schema, then update the history table.
+	ErrMigrationDirty = errors.New("rdb: migration dirty")
 )
 
 // Error describes a failed operation. It matches its Kind and its Err with

@@ -13,6 +13,9 @@ import (
 // errUnique is the fake driver's unique-violation error.
 var errUnique = errors.New("fake: duplicate key")
 
+// errBusy is the fake driver's retryable error.
+var errBusy = errors.New("fake: database is busy")
+
 // fakeDB is an in-memory database/sql backend whose behavior tests script.
 type fakeDB struct {
 	mu sync.Mutex
@@ -202,8 +205,11 @@ func (d *testDriver) Open(u *url.URL) (Connection, error) {
 }
 
 func (d *testDriver) Classify(err error) error {
-	if errors.Is(err, errUnique) {
+	switch {
+	case errors.Is(err, errUnique):
 		return ErrUniqueViolation
+	case errors.Is(err, errBusy):
+		return ErrRetryable
 	}
 	return nil
 }

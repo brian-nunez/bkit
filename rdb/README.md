@@ -178,6 +178,107 @@ err := db.Ping(ctx)
 
 rdb does not build queries or translate SQL between dialects.
 
+### Migrations
+
+Keep migrations as `.sql` files and apply them at startup:
+
+```go
+//go:embed migrations/*.sql
+var files embed.FS
+
+migrations, err := fs.Sub(files, "migrations")
+if err != nil {
+	return err
+}
+applied, err := db.Migrate(ctx, migrations)
+```
+
+`Migrate` applies every pending migration in version order and returns the
+ones it applied. It reads the root of the file system, so use `fs.Sub` for a
+subdirectory. Running it again applies only new files.
+
+| File | Runs on |
+| --- | --- |
+| `0001_create_users.sql` | Every database |
+| `0001_create_users.postgres.sql` | Postgres, in place of the plain file |
+| `0002_add_index.sql` | Every database, after version 1 |
+
+A file name is a positive version number, an underscore, a name of letters,
+digits, `_`, and `-`, an optional dialect (`sqlite`, `postgres`, or
+`mysql`), and `.sql`. Sequence numbers and timestamps both work as
+versions. Other files and subdirectories are ignored.
+
+Statements end at semicolons outside quotes and comments, and each one is
+sent exactly as written, without placeholder rewriting. A statement whose
+body holds semicolons, such as a trigger, goes between two directives:
+
+```sql
+CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);
+
+-- rdb:begin-statement
+CREATE TRIGGER users_audit AFTER INSERT ON users
+BEGIN
+  INSERT INTO audit (user_id) VALUES (NEW.id);
+END;
+-- rdb:end-statement
+```
+
+#### Transactions
+
+SQLite and Postgres apply each migration and its history row in one
+transaction, so a failed migration changes nothing. MySQL and MariaDB commit
+schema changes as they run. On those databases, a migration is recorded as
+dirty before it starts and marked finished at the end, so a failure partway
+through stays recorded.
+
+Start a file with `-- rdb:no-transaction` for statements that cannot run in
+a transaction, such as `CREATE INDEX CONCURRENTLY` on Postgres or
+`PRAGMA foreign_keys` on SQLite. Those files follow the dirty-record rule on
+every database.
+
+A dirty migration stops every later run with `ErrMigrationDirty`. Repair the
+schema by hand, then delete the migration's row from the history table to
+run it again, or set its `dirty` column to 0 to mark it finished.
+
+#### Concurrent runs
+
+Instances that start at once take turns, and each migration runs once. A
+run waits while another holds the lock, honoring `ctx`.
+
+| Database | Lock |
+| --- | --- |
+| Postgres | An advisory lock for the whole run |
+| MySQL and MariaDB | A named lock (`GET_LOCK`) for the whole run |
+| SQLite | The database's write lock, taken for each migration |
+
+On SQLite, a migration marked `-- rdb:no-transaction` runs without the
+write lock, since SQLite holds locks only inside a transaction. A run that
+starts during it stops with `ErrMigrationDirty`. Writes from other
+connections to a SQLite database wait while a migration holds the write
+lock, up to the driver's busy timeout.
+
+#### History and checks
+
+The history table is `rdb_migrations`. It stores each migration's version,
+name, SHA-256 checksum, a dirty flag, and the time it finished, in Unix
+milliseconds. `rdb.MigrationTable(name)` picks another table, so separate
+sets of migrations can share a database. Before applying anything, `Migrate`
+compares the history with the files:
+
+| Sentinel | Cause |
+| --- | --- |
+| `ErrMigrationChanged` | An applied file changed. Add a new migration instead |
+| `ErrMigrationMismatch` | An applied migration is missing from the files, or a pending one sorts before an applied one |
+| `ErrMigrationDirty` | A migration started and did not finish |
+| `ErrInvalidMigration` | A file name is invalid, a version has two files for one dialect or none for this one, a directive is misused, or there are no files |
+
+Line endings do not affect the checksum. Migrations only move forward. To
+undo a migration, add one that reverses it.
+
+`db.MigrationStatus(ctx, migrations)` returns every migration with
+`AppliedAt` set on those that have run. It changes nothing and returns the
+same errors `Migrate` would.
+
 ## Configuration
 
 ### Pool
@@ -234,6 +335,10 @@ and the driver's original error. Match them with `errors.Is`:
 | `ErrUnknownDriver` | No driver matches the URL's scheme |
 | `ErrInvalidURL` | The URL cannot be parsed or has no scheme |
 | `ErrInvalidOption` | An option is out of range or conflicts |
+| `ErrInvalidMigration` | A migration file or set cannot run |
+| `ErrMigrationChanged` | An applied migration's file changed |
+| `ErrMigrationMismatch` | Applied migrations do not fit the files |
+| `ErrMigrationDirty` | A migration started and did not finish |
 
 ```go
 _, err := db.Exec(ctx, "INSERT INTO users (email) VALUES (?)", email)
@@ -259,6 +364,19 @@ A driver implements `rdb.Driver`:
 A driver module exposes `Driver()` returning `rdb.WithDriver(d)`, and a
 typed `Open` that builds a `Connection` from a `Config` struct and calls
 `rdb.OpenConnection`.
+
+Migrations support the `sqlite`, `postgres`, and `mysql` dialects. A driver
+runs the conformance suite in `github.com/brian-nunez/bkit/rdb/rdbtest`
+against a real database:
+
+```go
+rdbtest.RunMigrations(t, rdbtest.Config{
+	Open: func(t *testing.T) *rdb.DB { return openTestDB(t) },
+})
+```
+
+`Open` must reach the same database every time it is called within one
+test, so the suite can run migrations from several pools at once.
 
 ## Development
 
