@@ -18,15 +18,32 @@ go get github.com/brian-nunez/bkit/stash
 import "github.com/brian-nunez/bkit/stash"
 ```
 
+Then install a driver for each backend the application uses:
+
+| Driver | Module | Backend | Opens |
+| --- | --- | --- | --- |
+| [memory](drivers/memory) | `github.com/brian-nunez/bkit/stash/drivers/memory` | Process memory | `memory://`, or `memory.New()` |
+| [database](drivers/database) | `github.com/brian-nunez/bkit/stash/drivers/database` | A table in SQLite, Postgres, or MySQL, through rdb | `database.New(ctx, db)` |
+| [redis](drivers/redis) | `github.com/brian-nunez/bkit/stash/drivers/redis` | A Redis server | `redis://`, `rediss://`, or `redis.New(ctx, cfg)` |
+| [valkey](drivers/valkey) | `github.com/brian-nunez/bkit/stash/drivers/valkey` | A Valkey server | `valkey://`, `valkeys://`, or `valkey.New(ctx, cfg)` |
+
 ## Usage
 
 Pass every driver the application supports to `stash.Open`. The URL's scheme
 picks one, and only that driver connects:
 
 ```go
+import (
+	"github.com/brian-nunez/bkit/stash"
+	"github.com/brian-nunez/bkit/stash/drivers/memory"
+	"github.com/brian-nunez/bkit/stash/drivers/redis"
+	"github.com/brian-nunez/bkit/stash/drivers/valkey"
+)
+
 s, err := stash.Open(ctx, os.Getenv("STASH_URL"),
-	stash.WithDriver(localDriver),
-	stash.WithDriver(serverDriver),
+	memory.Driver(),
+	redis.Driver(),
+	valkey.Driver(),
 )
 if err != nil {
 	return err
@@ -34,9 +51,33 @@ if err != nil {
 defer s.Close()
 ```
 
-An unknown scheme fails with `stash.ErrUnknownDriver`. Drivers also have
-their own constructors, for example one that takes an existing database
-connection.
+| `STASH_URL` | Result |
+| --- | --- |
+| `memory://` | An in-process store |
+| `redis://cache.internal:6379/0` | A Redis store |
+| `valkey://cache.internal:6379/0` | A Valkey store |
+| `postgres://...` | `stash.ErrUnknownDriver`, because no driver opens that scheme |
+
+To keep keys in the application's SQL database, build the store from its
+`*rdb.DB`. It shares the database's connection pool:
+
+```go
+import (
+	"github.com/brian-nunez/bkit/rdb"
+	"github.com/brian-nunez/bkit/rdb/drivers/postgres"
+	"github.com/brian-nunez/bkit/rdb/drivers/sqlite"
+	"github.com/brian-nunez/bkit/stash/drivers/database"
+)
+
+db, err := rdb.Open(ctx, os.Getenv("DATABASE_URL"), sqlite.Driver(), postgres.Driver())
+if err != nil {
+	return err
+}
+s, err := database.New(ctx, db)
+```
+
+Every driver runs the same conformance suite, so code written against
+`*stash.Store` behaves the same on all of them.
 
 Pass the `*stash.Store` to the rest of the application:
 

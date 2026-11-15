@@ -27,6 +27,8 @@ tags, so you import exactly the pieces you use.
 | [stash](stash) | `github.com/brian-nunez/bkit/stash` | One API over key-value stores, with expiry, atomic operations, and typed values |
 | [stash/drivers/memory](stash/drivers/memory) | `github.com/brian-nunez/bkit/stash/drivers/memory` | In-process stash store |
 | [stash/drivers/database](stash/drivers/database) | `github.com/brian-nunez/bkit/stash/drivers/database` | stash store in a SQL database opened with rdb |
+| [stash/drivers/redis](stash/drivers/redis) | `github.com/brian-nunez/bkit/stash/drivers/redis` | stash store on a Redis server |
+| [stash/drivers/valkey](stash/drivers/valkey) | `github.com/brian-nunez/bkit/stash/drivers/valkey` | stash store on a Valkey server |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
