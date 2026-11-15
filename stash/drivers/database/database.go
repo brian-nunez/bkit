@@ -182,11 +182,13 @@ func (b *backend) ms() int64 {
 }
 
 // expiry returns the expires_at value for ttl from now: nil for no expiry.
+// A ttl under a millisecond counts as one millisecond, as in the redis and
+// valkey drivers, so the key is not expired when it is written.
 func (b *backend) expiry(ttl time.Duration) any {
 	if ttl <= 0 {
 		return nil
 	}
-	return b.ms() + ttl.Milliseconds()
+	return b.ms() + max(ttl.Milliseconds(), 1)
 }
 
 // wrote counts a write and sweeps expired rows every sweepEvery writes.

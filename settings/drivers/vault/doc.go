@@ -12,7 +12,9 @@
 // lowercases its keys and merges it with other sources.
 //
 // Authentication is a token passed with [WithToken]. The caller obtains and
-// renews it. A file rendered by Vault Agent needs no driver: read it with
+// renews it. While a token is set, a redirect to another host or from https
+// to http is not followed, so the token stays on the configured server, and
+// the redirect response is reported as [ErrResponse]. A file rendered by Vault Agent needs no driver: read it with
 // settings.File.
 //
 // Every request honors the context passed to Load. Errors match

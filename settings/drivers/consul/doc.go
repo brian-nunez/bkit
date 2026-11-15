@@ -16,6 +16,10 @@
 // settings lowercases keys, converts values when they are read, and merges
 // the result with other sources.
 //
+// While a token is set, a redirect to another host or from https to http is
+// not followed, so the token stays on the configured agent, and the
+// redirect response is reported as [ErrResponse].
+//
 // Every request honors the context passed to Load. Errors match
 // [ErrNotFound], [ErrPermission], [ErrResponse], settings.ErrParse, or the
 // context's error with errors.Is. Error messages never include the token.

@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"net/url"
@@ -93,6 +94,147 @@ func TestInMemory(t *testing.T) {
 	_, err := rdb.Open(ctx, "sqlite::memory:", Driver(), rdb.WithMaxOpenConns(2))
 	if !errors.Is(err, rdb.ErrInvalidOption) {
 		t.Errorf("err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestInMemoryOutlivesConnections(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, "sqlite::memory:")
+	// With no idle connections allowed, the pool closes the connection after
+	// every statement, so each statement runs on a new one.
+	db.SQL().SetMaxIdleConns(0)
+	for _, q := range []string{"CREATE TABLE t (n INTEGER)", "INSERT INTO t VALUES (1)"} {
+		if _, err := db.Exec(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if n, err := rdb.One[int](ctx, db, "SELECT count(*) FROM t"); err != nil || n != 1 {
+		t.Fatalf("count = %d, %v; want 1, nil", n, err)
+	}
+	if got := db.Stats().MaxIdleClosed; got < 2 {
+		t.Errorf("MaxIdleClosed = %d, want at least 2 replaced connections", got)
+	}
+	if got := pragma[int](t, db, "foreign_keys"); got != 1 {
+		t.Errorf("foreign_keys = %d, want 1", got)
+	}
+
+	other := open(t, "sqlite::memory:")
+	if _, err := other.Exec(ctx, "SELECT * FROM t"); err == nil {
+		t.Error("a second in-memory database sees the first one's table")
+	}
+}
+
+func TestInMemoryFreedOnClose(t *testing.T) {
+	ctx := context.Background()
+	c := connection(memory, nil).Connector.(*connector)
+	db := sql.OpenDB(c)
+	if _, err := db.ExecContext(ctx, "CREATE TABLE t (n INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Connect(ctx); !errors.Is(err, errClosed) {
+		t.Errorf("Connect after Close: err = %v, want errClosed", err)
+	}
+	if err := c.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
+
+	after := sql.OpenDB(&connector{dsn: c.dsn})
+	defer after.Close()
+	var n int
+	if err := after.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&n); err != nil || n != 0 {
+		t.Errorf("tables after Close = %d, %v; want 0, nil", n, err)
+	}
+}
+
+func TestInMemoryForms(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		url    string
+		shared bool
+	}{
+		{"sqlite:file::memory:", false},
+		{"sqlite:file:%253Amemory%253A", false},
+		{"sqlite:file:named?mode=memory", false},
+		{"sqlite:file:named?mode=ro&mode=memory", false},
+		{"sqlite:file:named?mode=memory&cache=shared&cache=private", false},
+		{"sqlite:file::memory:?vfs=memdb", false},
+		{"sqlite:named?vfs=memdb", false},
+		{"sqlite:file:named?vfs=memdb", false},
+		{"sqlite:file:shared-a?mode=memory&cache=shared", true},
+		{"sqlite:file:shared-b?vfs=memdb&cache=shared", true},
+		{"sqlite:file:/shared-c?vfs=memdb", true},
+		{"sqlite:file:///shared-d?vfs=memdb", true},
+		{"sqlite:///shared-e?vfs=memdb", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			db := open(t, tt.url)
+			if got := db.Stats().MaxOpenConnections; got != 1 {
+				t.Errorf("MaxOpenConnections = %d, want 1", got)
+			}
+			if got := pragma[string](t, db, "journal_mode"); got != "memory" {
+				t.Errorf("journal_mode = %q, want memory", got)
+			}
+			db.SQL().SetMaxIdleConns(0) // a new connection for every statement
+			for _, q := range []string{"CREATE TABLE t (n INTEGER)", "INSERT INTO t VALUES (1)"} {
+				if _, err := db.Exec(ctx, q); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			if n, err := rdb.One[int](ctx, db, "SELECT count(*) FROM t"); err != nil || n != 1 {
+				t.Fatalf("count = %d, %v; want 1, nil", n, err)
+			}
+
+			other := open(t, tt.url)
+			_, err := other.Exec(ctx, "SELECT * FROM t")
+			if tt.shared && err != nil {
+				t.Errorf("a second DB on a shared name: %v", err)
+			}
+			if !tt.shared && err == nil {
+				t.Error("a second DB sees a private database's table")
+			}
+		})
+	}
+	if _, err := rdb.Open(ctx, "sqlite:file::memory:", Driver(), rdb.WithMaxOpenConns(2)); !errors.Is(err, rdb.ErrInvalidOption) {
+		t.Errorf("err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestMemoryDB(t *testing.T) {
+	tests := []struct {
+		path, query      string
+		inMemory, shared bool
+	}{
+		{"", "", true, false},
+		{memory, "", true, false},
+		{memory, "cache=shared", true, false},
+		{"file::memory:", "cache=shared", true, true},
+		{"file:%3Amemory%3A", "", true, false},
+		{"file:a%zz", "mode=memory", true, false},
+		{"file:a", "mode=memory&cache=shared", true, true},
+		{"file:a", "mode=Memory", false, false},
+		{"file:a", "cache=shared", false, false},
+		{"a", "mode=memory", false, false},
+		{"/a", "vfs=memdb", true, true},
+		{"a", "vfs=memdb", true, false},
+		{"file://localhost/a", "vfs=memdb", true, true},
+		{"file://localhost", "vfs=memdb", true, false},
+		{"file:///:memory:", "", false, false},
+		{"app.db", "", false, false},
+		{"file:app.db", "", false, false},
+	}
+	for _, tt := range tests {
+		q, err := url.ParseQuery(tt.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inMemory, shared := memoryDB(tt.path, q)
+		if inMemory != tt.inMemory || shared != tt.shared {
+			t.Errorf("memoryDB(%q, %q) = %v, %v; want %v, %v", tt.path, tt.query, inMemory, shared, tt.inMemory, tt.shared)
+		}
 	}
 }
 
@@ -245,6 +387,46 @@ func TestReadOnlyTx(t *testing.T) {
 	}
 }
 
+func TestIsolation(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, "sqlite::memory:")
+	tests := []struct {
+		level sql.IsolationLevel
+		ok    bool
+	}{
+		{sql.LevelDefault, true},
+		{sql.LevelReadUncommitted, true},
+		{sql.LevelReadCommitted, true},
+		{sql.LevelWriteCommitted, false},
+		{sql.LevelRepeatableRead, true},
+		{sql.LevelSnapshot, true},
+		{sql.LevelSerializable, true},
+		{sql.LevelLinearizable, false},
+		{sql.LevelLinearizable + 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			err := db.Tx(ctx, func(tx *rdb.Tx) error {
+				_, err := rdb.One[int](ctx, tx, "SELECT 1")
+				return err
+			}, rdb.Isolation(tt.level))
+			if tt.ok {
+				if err != nil {
+					t.Fatalf("Tx: %v", err)
+				}
+				return
+			}
+			var e *rdb.Error
+			if !errors.As(err, &e) || e.Op != "begin" || e.Kind != nil || !strings.Contains(err.Error(), "unsupported isolation level") {
+				t.Fatalf("err = %v, want an unclassified begin error for an unsupported level", err)
+			}
+		})
+	}
+	if _, err := rdb.One[int](ctx, db, "SELECT 1"); err != nil {
+		t.Errorf("query after a rejected level: %v", err)
+	}
+}
+
 // failingConn fails ExecContext for one query.
 type failingConn struct {
 	sqliteConn
@@ -314,14 +496,17 @@ func TestReadOnlyTxFailures(t *testing.T) {
 func TestConnectFailures(t *testing.T) {
 	ctx := context.Background()
 	missing := filepath.Join(t.TempDir(), "no", "such", "x.db")
-	if _, err := (connector{dsn: missing}).Connect(ctx); err == nil {
+	if _, err := (&connector{dsn: missing}).Connect(ctx); err == nil {
 		t.Error("Connect to a missing directory succeeded")
+	}
+	if _, err := (&connector{dsn: missing, keepAlive: true}).Connect(ctx); err == nil {
+		t.Error("Connect with a keep-alive to a missing directory succeeded")
 	}
 
 	defer func(orig func(string) (driver.Conn, error)) { openConn = orig }(openConn)
 	closed := false
 	openConn = func(string) (driver.Conn, error) { return plainConn{closed: &closed}, nil }
-	if _, err := (connector{dsn: memory}).Connect(ctx); !errors.Is(err, errConnType) || !closed {
+	if _, err := (&connector{dsn: memory}).Connect(ctx); !errors.Is(err, errConnType) || !closed {
 		t.Errorf("Connect err = %v, closed = %v; want errConnType and a closed connection", err, closed)
 	}
 }

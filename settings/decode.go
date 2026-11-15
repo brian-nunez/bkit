@@ -32,8 +32,10 @@ var durationType = reflect.TypeFor[time.Duration]()
 //     booleans format into strings;
 //   - numbers convert between numeric types when the value fits exactly;
 //   - a list fills a slice, replacing it;
-//   - a map fills a struct, or a map with string keys, keeping entries the
-//     configuration does not set;
+//   - a map fills a struct, or a map with string keys such as
+//     map[string]any, keeping entries the configuration does not set; in a
+//     map whose values are interfaces, an existing map[string]any value
+//     merges with the configuration's map the same way;
 //   - a pointer is allocated when nil and filled through.
 //
 // Any other combination fails with ErrType and the path of the value.
@@ -52,14 +54,16 @@ func assign(dst reflect.Value, src any, path string) error {
 		return nil
 	}
 	sv := reflect.ValueOf(src)
-	if sv.Type().AssignableTo(dst.Type()) {
+	// A map target merges in assignMap even when the tree's map type is
+	// assignable to it.
+	if sv.Type().AssignableTo(dst.Type()) && dst.Kind() != reflect.Map {
 		dst.Set(reflect.ValueOf(clone(src)))
 		return nil
 	}
 	if s, ok := src.(string); ok {
 		if u, ok := dst.Addr().Interface().(encoding.TextUnmarshaler); ok {
 			if err := u.UnmarshalText([]byte(s)); err != nil {
-				return &Error{Path: path, Err: fmt.Errorf("%w: %w", ErrType, err)}
+				return &Error{Path: path, Err: &textError{msg: typeMessage(src, dst.Type()), cause: err}}
 			}
 			return nil
 		}
@@ -155,6 +159,14 @@ func assignMap(dst reflect.Value, src any, path string) error {
 		if existing := dst.MapIndex(key); existing.IsValid() {
 			elem.Set(existing)
 		}
+		// A map held in an element of interface type, as in map[string]any,
+		// merges with a map from the configuration key by key.
+		if sub, ok := m[k].(map[string]any); ok && elemType.Kind() == reflect.Interface {
+			if cur, ok := elem.Interface().(map[string]any); ok && cur != nil {
+				dst.SetMapIndex(key, reflect.ValueOf(merge(cur, clone(sub))))
+				continue
+			}
+		}
 		if err := assign(elem, m[k], join(path, k)); err != nil {
 			return err
 		}
@@ -203,8 +215,30 @@ func join(path, key string) string {
 	return path + "." + key
 }
 
+// typeError reports that src cannot convert to t. The message names src's
+// type and never its value, which may be a secret.
 func typeError(path string, src any, t reflect.Type) error {
-	return &Error{Path: path, Err: fmt.Errorf("%w: cannot use %T value %v as %s", ErrType, src, src, t)}
+	return &Error{Path: path, Err: fmt.Errorf("%w: %s", ErrType, typeMessage(src, t))}
+}
+
+func typeMessage(src any, t reflect.Type) string {
+	return fmt.Sprintf("cannot use %T value as %s", src, t)
+}
+
+// textError reports a failed encoding.TextUnmarshaler. Its message leaves
+// out the cause's text, which may quote the value, and it matches both
+// ErrType and the cause.
+type textError struct {
+	msg   string
+	cause error
+}
+
+func (e *textError) Error() string {
+	return ErrType.Error() + ": " + e.msg
+}
+
+func (e *textError) Unwrap() []error {
+	return []error{ErrType, e.cause}
 }
 
 func toBool(v reflect.Value) (bool, bool) {

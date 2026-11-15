@@ -359,3 +359,30 @@ func TestEnvOverridesFile(t *testing.T) {
 		t.Fatalf("server.timeout = %v", got)
 	}
 }
+
+func TestJSONBigIntegers(t *testing.T) {
+	doc := `{"over": 9223372036854775809, "max": 18446744073709551615,
+		"beyond": 18446744073709551616, "negative": -9223372036854775809, "float": 1.5e3}`
+	fsys := fstest.MapFS{"c.json": {Data: []byte(doc)}}
+	cfg := mustLoad(t, settings.FileFS(fsys, "c.json", settings.JSON))
+
+	want := map[string]any{
+		"over": uint64(9223372036854775809), "max": uint64(math.MaxUint64),
+		"beyond": "18446744073709551616", "negative": "-9223372036854775809", "float": 1500.0,
+	}
+	if got := cfg.Data(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("Data() = %#v, want %#v", got, want)
+	}
+	if u, err := settings.Get[uint64](cfg, "over"); err != nil || u != 9223372036854775809 {
+		t.Fatalf("Get[uint64](over) = %d, %v", u, err)
+	}
+	if u, err := settings.Get[uint64](cfg, "max"); err != nil || u != math.MaxUint64 {
+		t.Fatalf("Get[uint64](max) = %d, %v", u, err)
+	}
+	if s, err := settings.Get[string](cfg, "beyond"); err != nil || s != "18446744073709551616" {
+		t.Fatalf("Get[string](beyond) = %q, %v", s, err)
+	}
+	if f, err := settings.Get[float64](cfg, "beyond"); err != nil || f != 18446744073709551616 {
+		t.Fatalf("Get[float64](beyond) = %v, %v", f, err)
+	}
+}

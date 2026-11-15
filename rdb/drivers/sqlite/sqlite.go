@@ -2,12 +2,15 @@ package sqlite
 
 import (
 	"context"
+	"crypto/rand"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 
 	msqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -18,10 +21,15 @@ import (
 // memory is the path of a private in-memory database.
 const memory = ":memory:"
 
+// memoryName prefixes the unique name that stands in for a private in-memory
+// database.
+const memoryName = "file:bkit-rdb-memory-"
+
 // Config describes a SQLite database for Open.
 type Config struct {
-	// Path is the database file, created if missing. An empty path or
-	// ":memory:" opens a private in-memory database.
+	// Path is the database file, created if missing. An empty path,
+	// ":memory:", or a file: URI that SQLite opens in memory, such as
+	// "file::memory:", opens an in-memory database.
 	Path string
 }
 
@@ -88,29 +96,75 @@ func (sqliteDriver) Classify(err error) error {
 // connection builds the Connection for path. A _pragma in params replaces
 // the default pragma of the same name.
 func connection(path string, params url.Values) rdb.Connection {
-	inMemory := path == "" || path == memory
-	if inMemory {
-		path = memory
+	q := url.Values{}
+	for k, vs := range params {
+		q[k] = vs
 	}
+	inMemory, shared := memoryDB(path, q)
 	defaults := []string{"foreign_keys(1)", "busy_timeout(5000)"}
 	if !inMemory {
 		defaults = append(defaults, "journal_mode(WAL)")
 	}
-	q := url.Values{}
-	for k, vs := range params {
-		q[k] = vs
+	if inMemory && !shared {
+		// A private in-memory database belongs to the one connection that
+		// opened it and vanishes when the pool closes that connection. A
+		// uniquely named shared-cache memory database stores data the same
+		// way, a replacement connection reaches it, and the connector's
+		// keep-alive connection holds it open until the DB is closed.
+		path = memoryName + rand.Text()
+		q.Set("mode", "memory")
+		q.Set("cache", "shared")
 	}
 	for _, d := range defaults {
 		if !slices.ContainsFunc(q["_pragma"], func(p string) bool { return pragmaName(p) == pragmaName(d) }) {
 			q.Add("_pragma", d)
 		}
 	}
-	conn := rdb.Connection{Connector: connector{dsn: path + "?" + q.Encode()}}
+	conn := rdb.Connection{Connector: &connector{dsn: path + "?" + q.Encode(), keepAlive: inMemory}}
 	if inMemory {
-		// Every connection to :memory: would open its own empty database.
+		// The pool keeps one connection to every in-memory database.
+		// Connections that share a cache lock whole tables against each
+		// other.
 		conn.MaxOpenConns = 1
 	}
 	return conn
+}
+
+// memoryDB reports whether path and q, read the way SQLite reads them, open
+// an in-memory database, and whether every connection that opens the same
+// name shares it. SQLite reads mode and cache only from a file: URI, where
+// the last value of a parameter wins, and the memdb VFS shares a database
+// whose name starts with "/".
+func memoryDB(path string, q url.Values) (inMemory, shared bool) {
+	name, uri := strings.CutPrefix(path, "file:")
+	var mode, cache string
+	if uri {
+		if authority, ok := strings.CutPrefix(name, "//"); ok {
+			name = ""
+			if i := strings.IndexByte(authority, '/'); i >= 0 {
+				name = authority[i:]
+			}
+		}
+		if decoded, err := url.PathUnescape(name); err == nil {
+			name = decoded
+		}
+		mode, cache = last(q["mode"]), last(q["cache"])
+	}
+	switch {
+	case path == "" || name == memory || mode == "memory":
+		return true, cache == "shared"
+	case last(q["vfs"]) == "memdb":
+		return true, cache == "shared" || strings.HasPrefix(name, "/")
+	}
+	return false, false
+}
+
+// last returns the last of vs, or "" when vs is empty.
+func last(vs []string) string {
+	if len(vs) == 0 {
+		return ""
+	}
+	return vs[len(vs)-1]
 }
 
 // pragmaName returns the lowercased name of a _pragma value such as
@@ -132,15 +186,30 @@ var openConn = sqliteDrv.Open
 // read-only wrapper forwards.
 var errConnType = errors.New("sqlite: unexpected driver connection type")
 
-// connector opens connections to one database.
+// errClosed reports a Connect after the connector was closed.
+var errClosed = errors.New("sqlite: connector is closed")
+
+// connector opens connections to one database. With keepAlive set, it holds
+// one extra connection open from the first Connect until Close, so an
+// in-memory database outlives every pool connection.
 type connector struct {
-	dsn string
+	dsn       string
+	keepAlive bool
+
+	mu     sync.Mutex
+	keep   driver.Conn
+	closed bool
 }
 
 // Connect opens a connection.
-func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if c.keepAlive {
+		if err := c.hold(); err != nil {
+			return nil, err
+		}
 	}
 	raw, err := openConn(c.dsn)
 	if err != nil {
@@ -154,8 +223,40 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	return &conn{sqliteConn: sc}, nil
 }
 
+// hold opens the keep-alive connection unless it is already open.
+func (c *connector) hold() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return errClosed
+	}
+	if c.keep != nil {
+		return nil
+	}
+	keep, err := openConn(c.dsn)
+	if err != nil {
+		return err
+	}
+	c.keep = keep
+	return nil
+}
+
+// Close closes the keep-alive connection, freeing an in-memory database.
+// database/sql calls it when the DB is closed.
+func (c *connector) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	if c.keep == nil {
+		return nil
+	}
+	err := c.keep.Close()
+	c.keep = nil
+	return err
+}
+
 // Driver returns the underlying SQLite driver.
-func (connector) Driver() driver.Driver {
+func (*connector) Driver() driver.Driver {
 	return sqliteDrv
 }
 
@@ -184,8 +285,17 @@ type conn struct {
 	broken bool
 }
 
-// BeginTx begins a transaction, read-only when opts asks for one.
+// BeginTx begins a transaction, read-only when opts asks for one. SQLite
+// transactions are serializable, which satisfies every weaker standard
+// level, and readers see a snapshot. Any other level fails, as it does in
+// the Postgres and MySQL drivers.
 func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	switch sql.IsolationLevel(opts.Isolation) {
+	case sql.LevelDefault, sql.LevelReadUncommitted, sql.LevelReadCommitted,
+		sql.LevelRepeatableRead, sql.LevelSnapshot, sql.LevelSerializable:
+	default:
+		return nil, fmt.Errorf("sqlite: unsupported isolation level: %v", opts.Isolation)
+	}
 	tx, err := c.sqliteConn.BeginTx(ctx, opts)
 	if err != nil || !opts.ReadOnly {
 		return tx, err

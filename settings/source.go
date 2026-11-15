@@ -70,7 +70,8 @@ func (f *fileSource) Load(ctx context.Context) (map[string]any, error) {
 }
 
 // JSON is the JSON Format. The document must be one object; duplicate keys
-// keep the last value, as in encoding/json. Integers keep full precision.
+// keep the last value, as in encoding/json. Integers keep full precision: an
+// integer that fits neither int64 nor uint64 is kept as its decimal string.
 var JSON Format = jsonFormat{}
 
 type jsonFormat struct{}

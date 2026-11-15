@@ -224,3 +224,108 @@ func TestTransportError(t *testing.T) {
 		t.Fatal("Load against a closed server succeeded")
 	}
 }
+
+// redirectTo serves a 307 redirect to target for every request.
+func redirectTo(t *testing.T, target string) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func wantRedirectStopped(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, consul.ErrResponse) || !strings.HasPrefix(err.Error(), "consul: unexpected response: status 307") {
+		t.Fatalf("err = %v, want ErrResponse with status 307", err)
+	}
+}
+
+func TestRedirectToOtherHostKeepsToken(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{}`)
+	srv := redirectTo(t, otherAddr+"/v1/kv/app?raw")
+	for name, opts := range map[string][]consul.Option{
+		"default client": {consul.WithToken("acl-token")},
+		"caller client":  {consul.WithToken("acl-token"), consul.WithHTTPClient(&http.Client{})},
+	} {
+		t.Run(name, func(t *testing.T) {
+			other.last = nil
+			_, err := mustNew(t, srv.URL, opts...).Key("app", settings.JSON).Load(context.Background())
+			wantRedirectStopped(t, err)
+			if other.last != nil {
+				t.Fatalf("redirect to another host followed with token %q", other.last.Header.Get("X-Consul-Token"))
+			}
+		})
+	}
+	if http.DefaultClient.CheckRedirect != nil {
+		t.Fatal("New changed http.DefaultClient")
+	}
+}
+
+func TestRedirectToPlainHTTPKeepsToken(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://"+srv.Listener.Addr().String()+r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+	_, err := mustNew(t, srv.URL, consul.WithToken("acl-token"), consul.WithHTTPClient(client)).Prefix("app").Load(context.Background())
+	wantRedirectStopped(t, err)
+	if client.CheckRedirect != nil {
+		t.Fatal("New changed the caller's client")
+	}
+}
+
+func TestRedirectSameHost(t *testing.T) {
+	var got string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/kv/old", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/v1/kv/app?raw", http.StatusTemporaryRedirect)
+	})
+	mux.HandleFunc("/v1/kv/app", func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("X-Consul-Token")
+		_, _ = w.Write([]byte(`{"name": "web"}`))
+	})
+	mux.HandleFunc("/v1/kv/loop", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, r.URL.RequestURI(), http.StatusTemporaryRedirect)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := mustNew(t, srv.URL, consul.WithToken("acl-token"))
+
+	data, err := c.Key("old", settings.JSON).Load(context.Background())
+	if err != nil || data["name"] != "web" || got != "acl-token" {
+		t.Fatalf("Load = %#v, %v, token %q", data, err, got)
+	}
+	if _, err := c.Key("loop", settings.JSON).Load(context.Background()); err == nil {
+		t.Fatal("redirect loop succeeded")
+	}
+}
+
+func TestRedirectWithoutToken(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{}`)
+	srv := redirectTo(t, otherAddr+"/v1/kv/app?raw")
+	if _, err := mustNew(t, srv.URL).Key("app", settings.JSON).Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if other.last == nil {
+		t.Fatal("redirect without a token not followed")
+	}
+}
+
+func TestRedirectCallerPolicy(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{}`)
+	srv := redirectTo(t, otherAddr+"/v1/kv/app?raw")
+	called := false
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		called = true
+		return nil
+	}}
+	if _, err := mustNew(t, srv.URL, consul.WithToken("acl-token"), consul.WithHTTPClient(client)).Key("app", settings.JSON).Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !called || other.last == nil {
+		t.Fatal("caller's CheckRedirect not used")
+	}
+}

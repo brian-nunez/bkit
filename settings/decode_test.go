@@ -346,3 +346,108 @@ func TestDecodeErrors(t *testing.T) {
 		t.Fatalf("embedded: err = %v", err)
 	}
 }
+
+// errEmpty is the cause secretText.UnmarshalText wraps.
+var errEmpty = errors.New("empty")
+
+// secretText rejects every value with an error that quotes it.
+type secretText string
+
+func (s *secretText) UnmarshalText(b []byte) error {
+	return fmt.Errorf("bad value %q: %w", b, errEmpty)
+}
+
+func TestErrorsOmitValues(t *testing.T) {
+	cfg := load(t, map[string]any{"db": map[string]any{"password": "hunter2", "host": "db.local"}})
+
+	tests := []struct {
+		name string
+		err  func() error
+		want string
+	}{
+		{"scalar", func() error { _, err := settings.Get[int](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as int"},
+		{"duration", func() error { _, err := settings.Get[time.Duration](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as time.Duration"},
+		{"section", func() error { var s struct{ DB string }; return cfg.Decode(&s) },
+			"settings: key db: type mismatch: cannot use map[string]interface {} value as string"},
+		{"text", func() error { _, err := settings.Get[secretText](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as settings_test.secretText"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.err()
+			if !errors.Is(err, settings.ErrType) {
+				t.Fatalf("err = %v, want ErrType", err)
+			}
+			if got := err.Error(); got != tt.want {
+				t.Fatalf("err = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "db.local") {
+				t.Fatalf("error message contains a value: %q", err)
+			}
+		})
+	}
+
+	_, err := settings.Get[secretText](cfg, "db.password")
+	if !errors.Is(err, errEmpty) {
+		t.Fatalf("err = %v, want the TextUnmarshaler cause in the chain", err)
+	}
+}
+
+func TestDecodeMergesAnyMaps(t *testing.T) {
+	type attrs map[string]any
+	cfg := load(t, map[string]any{
+		"extra": map[string]any{"b": 2, "db": map[string]any{"port": 5433}, "list": []any{"z"}, "gone": nil},
+		"named": map[string]any{"b": 2},
+		"value": map[string]any{"b": 2},
+		"items": []any{"z"},
+	})
+
+	type target struct {
+		Extra map[string]any
+		Named attrs
+		Value any
+		Items []any
+	}
+	got := target{
+		Extra: map[string]any{
+			"a": 1, "db": map[string]any{"host": "db.local", "port": 5432},
+			"list": []any{"x", "y"}, "gone": "here",
+		},
+		Named: attrs{"a": 1},
+		Value: map[string]any{"a": 1},
+		Items: []any{"x", "y"},
+	}
+	if err := cfg.Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	want := target{
+		Extra: map[string]any{
+			"a": 1, "b": int64(2), "db": map[string]any{"host": "db.local", "port": int64(5433)},
+			"list": []any{"z"}, "gone": nil,
+		},
+		Named: attrs{"a": 1, "b": int64(2)},
+		// A field of type any is replaced, like any value assignable to it.
+		Value: map[string]any{"b": int64(2)},
+		// A list replaces a slice.
+		Items: []any{"z"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Decode =\n%#v\nwant\n%#v", got, want)
+	}
+
+	// The merged maps share nothing with the configuration.
+	got.Extra["db"].(map[string]any)["port"] = 1
+	got.Extra["list"].([]any)[0] = "changed"
+	if v, _ := settings.Get[int](cfg, "extra.db.port"); v != 5433 {
+		t.Fatalf("extra.db.port = %d after changing the decoded map", v)
+	}
+	if v, _ := settings.Get[[]string](cfg, "extra.list"); v[0] != "z" {
+		t.Fatalf("extra.list = %v after changing the decoded slice", v)
+	}
+
+	if m, err := settings.Get[map[string]any](cfg, "extra"); err != nil || len(m) != 4 {
+		t.Fatalf("Get[map[string]any] = %#v, %v", m, err)
+	}
+}

@@ -98,7 +98,9 @@ Strings convert to numbers, booleans, durations, and types that implement
 `encoding.TextUnmarshaler`, so a value from the environment can be read as
 an `int`. `Decode` matches struct fields by their `settings:"name"` tag or
 by field name. Fields with no matching key keep their current value, which
-lets a pre-filled struct hold defaults. An empty path reads the whole tree.
+lets a pre-filled struct hold defaults. A pre-filled map with string keys,
+including `map[string]any`, keeps the entries the configuration does not
+set, and nested maps merge key by key. An empty path reads the whole tree.
 
 ## Cancellation
 
@@ -119,6 +121,11 @@ them with `errors.Is`:
 
 The source's original error stays in the chain. For example, a missing file
 matches `fs.ErrNotExist`.
+
+A conversion error names the key path and the value's type. It never
+includes the value, so a secret read as the wrong type stays out of logs.
+An `encoding.TextUnmarshaler` error stays in the chain, and its text is left
+out of the message.
 
 ## Development
 

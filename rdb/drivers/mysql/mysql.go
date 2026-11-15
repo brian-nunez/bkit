@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/go-sql-driver/mysql"
 
@@ -106,8 +109,38 @@ func dsn(u *url.URL) string {
 	if !q.Has("parseTime") {
 		q.Set("parseTime", "true")
 	}
-	// Encode escapes every value, and the driver unescapes them.
-	return cfg.FormatDSN() + "?" + q.Encode()
+	var b strings.Builder
+	b.WriteString(cfg.FormatDSN())
+	sep := byte('?')
+	for _, k := range slices.Sorted(maps.Keys(q)) {
+		for _, v := range q[k] {
+			b.WriteByte(sep)
+			sep = '&'
+			b.WriteString(dsnEscape(k))
+			b.WriteByte('=')
+			b.WriteString(dsnEscape(v))
+		}
+	}
+	return b.String()
+}
+
+// dsnEscape percent-encodes s for a DSN parameter. The driver unescapes some
+// values, such as loc and session variables, but reads others verbatim,
+// such as the comma-separated charset list and durations like "500µs". So
+// only bytes that the DSN parser or url.QueryUnescape would misread are
+// encoded, and commas and non-ASCII bytes stay as they are.
+func dsnEscape(s string) string {
+	var b strings.Builder
+	for i := range len(s) {
+		c := s[i]
+		if c >= utf8.RuneSelf || c == ',' || c == '-' || c == '.' || c == '_' || c == '~' ||
+			('0' <= c && c <= '9') || ('a' <= c|0x20 && c|0x20 <= 'z') {
+			b.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(&b, "%%%02X", c)
+	}
+	return b.String()
 }
 
 // Classify maps MySQL and MariaDB error numbers to rdb sentinels.
