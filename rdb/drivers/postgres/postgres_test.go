@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/brian-nunez/bkit/rdb"
@@ -66,6 +67,9 @@ func TestConfigURL(t *testing.T) {
 		{Config{}, "postgres:///"},
 		{Config{Host: "db", Database: "app"}, "postgres://db/app"},
 		{Config{Host: "::1", Port: 6432, Database: "app"}, "postgres://[::1]:6432/app"},
+		{Config{Host: "::1", Database: "app"}, "postgres://[::1]/app"},
+		{Config{Host: "fe80::1%eth0"}, "postgres://[fe80::1%25eth0]/"},
+		{Config{Host: "127.0.0.1"}, "postgres://127.0.0.1/"},
 		{Config{Host: "db", User: "app", Password: "p@ss/word"}, "postgres://app:p%40ss%2Fword@db/"},
 		{Config{Host: "db", SSLMode: "require", Params: map[string]string{"application_name": "api", "search_path": "app"}},
 			"postgres://db/?application_name=api&search_path=app&sslmode=require"},
@@ -76,6 +80,22 @@ func TestConfigURL(t *testing.T) {
 		}
 		if _, err := url.Parse(tt.cfg.url()); err != nil {
 			t.Errorf("url(%+v) does not parse: %v", tt.cfg, err)
+		}
+	}
+}
+
+func TestConfigIPv6Host(t *testing.T) {
+	for _, port := range []int{0, 6432} {
+		cfg, err := pgx.ParseConfig(Config{Host: "::1", Port: port, Database: "app"}.url())
+		if err != nil {
+			t.Fatalf("port %d: %v", port, err)
+		}
+		want := uint16(5432)
+		if port != 0 {
+			want = uint16(port)
+		}
+		if cfg.Host != "::1" || cfg.Port != want || cfg.Database != "app" {
+			t.Errorf("port %d: host %q port %d database %q; want ::1, %d, app", port, cfg.Host, cfg.Port, cfg.Database, want)
 		}
 	}
 }
