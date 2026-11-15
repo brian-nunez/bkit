@@ -1,0 +1,22 @@
+# Local Redis server for the redis driver's integration tests.
+#
+#   docker compose -f stash/drivers/redis/docker-compose.yml up -d --wait
+#   STASH_REDIS_URL=redis://localhost:56380/0 make -C stash/drivers/redis tests
+#   docker compose -f stash/drivers/redis/docker-compose.yml down
+#
+# The data lives in memory and is discarded with the container. The image is
+# pinned by digest (Redis 8.10.3, Alpine).
+services:
+  redis:
+    image: redis@sha256:7958cfbb9d152f87dadfbc89f1b0b15938f0b81ff8982feb327476f4911935c3
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "56380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 1.0
