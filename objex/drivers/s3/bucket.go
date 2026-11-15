@@ -7,6 +7,7 @@ import (
 	"io"
 	"iter"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -392,8 +393,11 @@ func presigned(method, rawURL string, signed http.Header, ttl time.Duration) obj
 	}
 }
 
+// rangeHeader builds the Range header for r. A length whose last byte would
+// pass math.MaxInt64 reads to the end, like a negative length, so the
+// header never carries an overflowed end.
 func rangeHeader(r objex.Range) string {
-	if r.Length < 0 {
+	if r.Length < 0 || r.Length > math.MaxInt64-r.Offset {
 		return fmt.Sprintf("bytes=%d-", r.Offset)
 	}
 	return fmt.Sprintf("bytes=%d-%d", r.Offset, r.Offset+r.Length-1)

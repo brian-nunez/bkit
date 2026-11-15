@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -538,6 +539,23 @@ func TestPutPartBoundaries(t *testing.T) {
 	info, err = b.Put(ctx, "two-parts", &sizedReader{n: 2 * minPartSize})
 	if err != nil || !strings.HasSuffix(info.ETag, "-2") || info.Size != 2*minPartSize {
 		t.Errorf("exactly two parts = %+v, %v; want a 2-part upload", info, err)
+	}
+}
+
+func TestGetRangeHugeLength(t *testing.T) {
+	ctx := context.Background()
+	_, _, b := fakeBucketClient(t)
+	if _, err := b.Put(ctx, "k", strings.NewReader("abcdef")); err != nil {
+		t.Fatal(err)
+	}
+	obj, err := b.Get(ctx, "k", objex.WithRange(2, math.MaxInt64))
+	if err != nil {
+		t.Fatalf("Get with a huge range length: %v", err)
+	}
+	defer obj.Close()
+	data, err := io.ReadAll(obj)
+	if err != nil || string(data) != "cdef" || obj.Info.Size != 6 {
+		t.Errorf("Get with a huge range length = %q (size %d), %v; want %q", data, obj.Info.Size, err, "cdef")
 	}
 }
 
