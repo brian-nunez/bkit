@@ -102,6 +102,10 @@ lets a pre-filled struct hold defaults. A pre-filled map with string keys,
 including `map[string]any`, keeps the entries the configuration does not
 set, and nested maps merge key by key. An empty path reads the whole tree.
 
+JSON integers keep full precision. An integer past the `int64` range reads
+as a `uint64`, and an integer past the `uint64` range is kept as its decimal
+string, which reads as a `string` or converts to a `float64`.
+
 ## Cancellation
 
 `Load` passes its context to every source and stops before the next source
