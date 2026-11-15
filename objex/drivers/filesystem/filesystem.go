@@ -396,12 +396,13 @@ func (b *Bucket) commit(op, key, tmp string, ifNotExists bool, ifMatch string) e
 	defer func() { _ = c.root.Remove(tmp) }()
 
 	dst := b.objectPath(key)
-	if err := c.root.MkdirAll(filepath.Dir(dst), dirPerm); err != nil {
+	if err := b.mkdirParents(dst); err != nil {
 		return objex.NewError(op, b.name, key, pathConflictKind(err), err)
 	}
+	rename := func() error { return c.root.Rename(tmp, dst) }
 
 	if !ifNotExists && ifMatch == "" {
-		if err := c.root.Rename(tmp, dst); err != nil {
+		if err := b.placeFile(dst, rename); err != nil {
 			return objex.NewError(op, b.name, key, pathConflictKind(err), err)
 		}
 		return nil
@@ -413,7 +414,7 @@ func (b *Bucket) commit(op, key, tmp string, ifNotExists bool, ifMatch string) e
 	if ifNotExists {
 		// A hard link fails if dst exists, which keeps create-only writes
 		// atomic even across processes.
-		err := c.root.Link(tmp, dst)
+		err := b.placeFile(dst, func() error { return c.root.Link(tmp, dst) })
 		switch {
 		case err == nil:
 			return nil
@@ -440,10 +441,54 @@ func (b *Bucket) commit(op, key, tmp string, ifNotExists bool, ifMatch string) e
 		}
 	}
 
-	if err := c.root.Rename(tmp, dst); err != nil {
+	if err := b.placeFile(dst, rename); err != nil {
 		return objex.NewError(op, b.name, key, pathConflictKind(err), err)
 	}
 	return nil
+}
+
+// placeRetries bounds how many times a write recreates its destination's
+// parent directories after a concurrent Delete, Move, or DeleteBucket
+// removed them as empty.
+const placeRetries = 8
+
+// mkdirParents creates the parent directories of dst, an object's
+// root-relative path. A concurrent Delete, Move, or DeleteBucket can remove
+// a directory while MkdirAll walks through it, which fails with ENOENT,
+// EINVAL, or EEXIST, so mkdirParents tries again while the bucket exists.
+func (b *Bucket) mkdirParents(dst string) error {
+	err := b.client.root.MkdirAll(filepath.Dir(dst), dirPerm)
+	for range placeRetries {
+		pruned := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EINVAL) || errors.Is(err, fs.ErrExist)
+		if !pruned || !b.exists() {
+			break
+		}
+		err = b.client.root.MkdirAll(filepath.Dir(dst), dirPerm)
+	}
+	return err
+}
+
+// placeFile calls place, which puts a file at dst. When a concurrent
+// Delete, Move, or DeleteBucket removed dst's parent directory as empty
+// after mkdirParents created it, place fails with ENOENT, or EINVAL on
+// macOS, so placeFile recreates the directory and calls place again while
+// the bucket exists. A deleted bucket is never recreated.
+func (b *Bucket) placeFile(dst string, place func() error) error {
+	err := place()
+	for range placeRetries {
+		pruned := errors.Is(err, fs.ErrNotExist) || errors.Is(err, syscall.EINVAL)
+		if !pruned || !b.exists() || b.mkdirParents(dst) != nil {
+			break
+		}
+		err = place()
+	}
+	return err
+}
+
+// exists reports whether the bucket directory exists.
+func (b *Bucket) exists() bool {
+	info, err := b.client.root.Stat(b.name)
+	return err == nil && info.IsDir()
 }
 
 // Get opens the object stored under key.
@@ -709,10 +754,10 @@ func (b *Bucket) Move(ctx context.Context, dst, src string) (objex.ObjectInfo, e
 	}
 
 	target := b.objectPath(dst)
-	if err := b.client.root.MkdirAll(filepath.Dir(target), dirPerm); err != nil {
+	if err := b.mkdirParents(target); err != nil {
 		return objex.ObjectInfo{}, objex.NewError(op, b.name, dst, pathConflictKind(err), err)
 	}
-	if err := b.client.root.Rename(b.objectPath(src), target); err != nil {
+	if err := b.placeFile(target, func() error { return b.client.root.Rename(b.objectPath(src), target) }); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return objex.ObjectInfo{}, b.missing(op, src, err)
 		}

@@ -71,6 +71,13 @@ func (f *faultFS) Mkdir(name string, perm fs.FileMode) error {
 	return f.rootFS.Mkdir(name, perm)
 }
 
+func (f *faultFS) MkdirAll(name string, perm fs.FileMode) error {
+	if err := f.check("mkdirall", name); err != nil {
+		return err
+	}
+	return f.rootFS.MkdirAll(name, perm)
+}
+
 func (f *faultFS) Open(name string) (file, error) {
 	if err := f.check("open", name); err != nil {
 		return nil, err
@@ -483,6 +490,85 @@ func TestReadFailures(t *testing.T) {
 		put(t, b, "dir/child", "x")
 		if _, err := b.Get(ctx, "dir"); !errors.Is(err, objex.ErrNotFound) {
 			t.Errorf("err = %v, want ErrNotFound", err)
+		}
+	})
+}
+
+// pruneBefore returns a fault that, the first time op runs on name, removes
+// the given directories under dir, as a concurrent Delete, Move, or
+// DeleteBucket pruning them would, and then lets op run.
+func pruneBefore(t *testing.T, dir, op, name string, dirs ...string) func(string, string) error {
+	t.Helper()
+	pruned := false
+	return func(gotOp, gotName string) error {
+		if pruned || gotOp != op || gotName != name {
+			return nil
+		}
+		pruned = true
+		for _, d := range dirs {
+			if err := os.Remove(filepath.Join(dir, filepath.FromSlash(d))); err != nil {
+				t.Errorf("prune %s: %v", d, err)
+			}
+		}
+		return nil
+	}
+}
+
+func TestWritesRecreatePrunedDirectories(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("Put", func(t *testing.T) {
+		c, faults, dir := faultClient(t)
+		faults.fail = pruneBefore(t, dir, "rename", "bucket/a/k", "bucket/a")
+		if _, err := c.Bucket("bucket").Put(ctx, "a/k", strings.NewReader("x")); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "bucket", "a", "k")); err != nil {
+			t.Errorf("object missing: %v", err)
+		}
+	})
+
+	t.Run("PutIfNotExists", func(t *testing.T) {
+		c, faults, dir := faultClient(t)
+		faults.fail = pruneBefore(t, dir, "link", "bucket/a/k", "bucket/a")
+		if _, err := c.Bucket("bucket").Put(ctx, "a/k", strings.NewReader("x"), objex.IfNotExists()); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+	})
+
+	t.Run("Move", func(t *testing.T) {
+		c, faults, dir := faultClient(t)
+		b := c.Bucket("bucket")
+		put(t, b, "src", "x")
+		faults.fail = pruneBefore(t, dir, "rename", "bucket/a/dst", "bucket/a")
+		if _, err := b.Move(ctx, "a/dst", "src"); err != nil {
+			t.Fatalf("Move: %v", err)
+		}
+	})
+
+	t.Run("MkdirAll", func(t *testing.T) {
+		c, faults, _ := faultClient(t)
+		failed := false
+		faults.fail = func(op, _ string) error {
+			if op == "mkdirall" && !failed {
+				failed = true
+				return syscall.ENOENT
+			}
+			return nil
+		}
+		if _, err := c.Bucket("bucket").Put(ctx, "a/k", strings.NewReader("x")); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+	})
+
+	t.Run("BucketDeleted", func(t *testing.T) {
+		c, faults, dir := faultClient(t)
+		faults.fail = pruneBefore(t, dir, "rename", "bucket/a/k", "bucket/a", "bucket")
+		if _, err := c.Bucket("bucket").Put(ctx, "a/k", strings.NewReader("x")); !errors.Is(err, objex.ErrNotFound) {
+			t.Errorf("err = %v, want ErrNotFound", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "bucket")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("Put recreated a deleted bucket: %v", err)
 		}
 	})
 }
