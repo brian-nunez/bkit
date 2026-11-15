@@ -6,7 +6,7 @@ REPOSITORY_ROOT := $(abspath $(CURDIR)/..)
 # Package paths (an extended regular expression) left out of coverage-check.
 # Reserved for shared test-helper packages, such as a driver contract suite;
 # every other package must reach 100% statement coverage.
-COVERAGE_EXCLUDE ?=
+COVERAGE_EXCLUDE ?= /rdbtest/
 
 .DEFAULT_GOAL := help
 .NOTPARALLEL: check
