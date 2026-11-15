@@ -47,9 +47,10 @@ Every connection runs these pragmas:
 | `busy_timeout` | `5000` | Waits up to 5 seconds for a lock before failing |
 | `journal_mode` | `WAL` | File databases only. Readers run alongside a writer. |
 
-An in-memory database is limited to one connection, because every
-connection to `:memory:` opens its own empty database. Asking for more with
-`rdb.WithMaxOpenConns` fails with `rdb.ErrInvalidOption`.
+An in-memory database is limited to one connection. Asking for more with
+`rdb.WithMaxOpenConns` fails with `rdb.ErrInvalidOption`. The database keeps
+its data until the `rdb.DB` is closed, even when the pool replaces the
+connection, such as after `rdb.WithConnMaxLifetime` expires.
 
 Query parameters pass to the SQLite driver. A `_pragma` parameter replaces
 the default of the same name:

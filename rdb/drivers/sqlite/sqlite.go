@@ -2,12 +2,14 @@ package sqlite
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
+	"sync"
 
 	msqlite "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -17,6 +19,10 @@ import (
 
 // memory is the path of a private in-memory database.
 const memory = ":memory:"
+
+// memoryName prefixes the unique name that stands in for a private in-memory
+// database.
+const memoryName = "file:bkit-rdb-memory-"
 
 // Config describes a SQLite database for Open.
 type Config struct {
@@ -89,9 +95,6 @@ func (sqliteDriver) Classify(err error) error {
 // the default pragma of the same name.
 func connection(path string, params url.Values) rdb.Connection {
 	inMemory := path == "" || path == memory
-	if inMemory {
-		path = memory
-	}
 	defaults := []string{"foreign_keys(1)", "busy_timeout(5000)"}
 	if !inMemory {
 		defaults = append(defaults, "journal_mode(WAL)")
@@ -100,14 +103,25 @@ func connection(path string, params url.Values) rdb.Connection {
 	for k, vs := range params {
 		q[k] = vs
 	}
+	if inMemory {
+		// A private in-memory database belongs to the one connection that
+		// opened it and vanishes when the pool closes that connection. A
+		// uniquely named shared-cache memory database stores data the same
+		// way, a replacement connection reaches it, and the connector's
+		// keep-alive connection holds it open until the DB is closed.
+		path = memoryName + rand.Text()
+		q.Set("mode", "memory")
+		q.Set("cache", "shared")
+	}
 	for _, d := range defaults {
 		if !slices.ContainsFunc(q["_pragma"], func(p string) bool { return pragmaName(p) == pragmaName(d) }) {
 			q.Add("_pragma", d)
 		}
 	}
-	conn := rdb.Connection{Connector: connector{dsn: path + "?" + q.Encode()}}
+	conn := rdb.Connection{Connector: &connector{dsn: path + "?" + q.Encode(), keepAlive: inMemory}}
 	if inMemory {
-		// Every connection to :memory: would open its own empty database.
+		// Connections that share a cache lock whole tables against each
+		// other, so the pool keeps one.
 		conn.MaxOpenConns = 1
 	}
 	return conn
@@ -132,15 +146,30 @@ var openConn = sqliteDrv.Open
 // read-only wrapper forwards.
 var errConnType = errors.New("sqlite: unexpected driver connection type")
 
-// connector opens connections to one database.
+// errClosed reports a Connect after the connector was closed.
+var errClosed = errors.New("sqlite: connector is closed")
+
+// connector opens connections to one database. With keepAlive set, it holds
+// one extra connection open from the first Connect until Close, so an
+// in-memory database outlives every pool connection.
 type connector struct {
-	dsn string
+	dsn       string
+	keepAlive bool
+
+	mu     sync.Mutex
+	keep   driver.Conn
+	closed bool
 }
 
 // Connect opens a connection.
-func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if c.keepAlive {
+		if err := c.hold(); err != nil {
+			return nil, err
+		}
 	}
 	raw, err := openConn(c.dsn)
 	if err != nil {
@@ -154,8 +183,40 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	return &conn{sqliteConn: sc}, nil
 }
 
+// hold opens the keep-alive connection unless it is already open.
+func (c *connector) hold() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return errClosed
+	}
+	if c.keep != nil {
+		return nil
+	}
+	keep, err := openConn(c.dsn)
+	if err != nil {
+		return err
+	}
+	c.keep = keep
+	return nil
+}
+
+// Close closes the keep-alive connection, freeing an in-memory database.
+// database/sql calls it when the DB is closed.
+func (c *connector) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	if c.keep == nil {
+		return nil
+	}
+	err := c.keep.Close()
+	c.keep = nil
+	return err
+}
+
 // Driver returns the underlying SQLite driver.
-func (connector) Driver() driver.Driver {
+func (*connector) Driver() driver.Driver {
 	return sqliteDrv
 }
 
