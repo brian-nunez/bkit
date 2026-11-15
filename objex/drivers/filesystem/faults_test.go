@@ -461,6 +461,78 @@ func TestConditionalWriteFailures(t *testing.T) {
 	})
 }
 
+// TestConditionalWriteIsAtomic starts an unconditional write to the same key
+// after an IfMatch write has checked its ETag and before it renames. The
+// unconditional write must wait and land last, so the final state is its
+// own.
+func TestConditionalWriteIsAtomic(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name  string
+		write func(*Bucket) error
+		want  string // final body of "k", or "" for no object
+	}{
+		{"Put", func(b *Bucket) error {
+			_, err := b.Put(ctx, "k", strings.NewReader("unconditional"))
+			return err
+		}, "unconditional"},
+		{"Delete", func(b *Bucket) error { return b.Delete(ctx, "k") }, ""},
+		{"Move", func(b *Bucket) error {
+			_, err := b.Move(ctx, "k", "other")
+			return err
+		}, "other"},
+		{"Copy", func(b *Bucket) error {
+			_, err := b.Copy(ctx, "k", "other")
+			return err
+		}, "other"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c, faults, _ := faultClient(t)
+			b := c.Bucket("bucket")
+			info := put(t, b, "k", "original")
+			put(t, b, "other", "other")
+
+			done := make(chan error, 1)
+			started := false
+			faults.fail = func(op, name string) error {
+				if started || op != "rename" || name != "bucket/k" {
+					return nil
+				}
+				started = true
+				go func() { done <- tc.write(b) }()
+				// Without the lock the write finishes here, between the
+				// ETag check and the rename.
+				select {
+				case err := <-done:
+					done <- err
+				case <-time.After(100 * time.Millisecond):
+				}
+				return nil
+			}
+			if _, err := b.Put(ctx, "k", strings.NewReader("conditional"), objex.IfMatch(info.ETag)); err != nil {
+				t.Fatalf("IfMatch Put: %v", err)
+			}
+			if err := <-done; err != nil {
+				t.Fatalf("concurrent %s: %v", tc.name, err)
+			}
+
+			obj, err := b.Get(ctx, "k")
+			if errors.Is(err, objex.ErrNotFound) && tc.want == "" {
+				return
+			}
+			if err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			body, _ := io.ReadAll(obj)
+			_ = obj.Close()
+			if string(body) != tc.want {
+				t.Errorf("body = %q, want %q: the IfMatch write overwrote a write that landed after its check", body, tc.want)
+			}
+		})
+	}
+}
+
 func TestReadFailures(t *testing.T) {
 	ctx := context.Background()
 
