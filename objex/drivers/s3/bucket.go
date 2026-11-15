@@ -139,7 +139,7 @@ func (b *Bucket) Stat(ctx context.Context, key string) (objex.ObjectInfo, error)
 func (b *Bucket) head(ctx context.Context, op, key string) (objex.ObjectInfo, error) {
 	out, err := b.client.api.HeadObject(ctx, &s3.HeadObjectInput{Bucket: aws.String(b.name), Key: aws.String(key)})
 	if err != nil {
-		return objex.ObjectInfo{}, wrap(op, b.name, key, err)
+		return objex.ObjectInfo{}, b.headObjectError(ctx, op, key, err)
 	}
 	return objex.ObjectInfo{
 		Key:          key,
@@ -149,6 +149,23 @@ func (b *Bucket) head(ctx context.Context, op, key string) (objex.ObjectInfo, er
 		LastModified: aws.ToTime(out.LastModified).UTC(),
 		Metadata:     out.Metadata,
 	}, nil
+}
+
+// headObjectError classifies a HeadObject failure. A HEAD response carries
+// no error code, so its 404 does not say whether the object or the bucket is
+// missing; on that path one HeadBucket request tells them apart, and a
+// missing bucket matches objex.ErrBucketNotFound as it does for every other
+// operation.
+func (b *Bucket) headObjectError(ctx context.Context, op, key string, err error) error {
+	wrapped := wrap(op, b.name, key, err)
+	if !errors.Is(wrapped, objex.ErrNotFound) {
+		return wrapped
+	}
+	_, bucketErr := b.client.api.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(b.name)})
+	if kind := classify(bucketErr); errors.Is(kind, objex.ErrNotFound) || errors.Is(kind, objex.ErrBucketNotFound) {
+		return objex.NewError(op, b.name, key, objex.ErrBucketNotFound, err)
+	}
+	return wrapped
 }
 
 // Delete removes the object stored under key.
