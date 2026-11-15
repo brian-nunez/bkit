@@ -632,6 +632,53 @@ func TestBucketExistsAndPing(t *testing.T) {
 	}
 }
 
+func TestStatNotFoundChecksTheBucket(t *testing.T) {
+	ctx := context.Background()
+	var bucketErr error
+	a := &fakeAPI{
+		headObject: func(*s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
+			return nil, statusError(http.StatusNotFound)
+		},
+		headBucket: func(*s3.HeadBucketInput) (*s3.HeadBucketOutput, error) {
+			if bucketErr != nil {
+				return nil, bucketErr
+			}
+			return &s3.HeadBucketOutput{}, nil
+		},
+	}
+	b := newTestClient(a, defaultRegion, "").Bucket("bucket")
+
+	cases := []struct {
+		name      string
+		bucketErr error
+		want      error
+	}{
+		{"bucket exists", nil, objex.ErrNotFound},
+		{"bucket returns 404", statusError(http.StatusNotFound), objex.ErrBucketNotFound},
+		{"bucket returns NoSuchBucket", apiError("NoSuchBucket"), objex.ErrBucketNotFound},
+		{"bucket check forbidden", statusError(http.StatusForbidden), objex.ErrNotFound},
+	}
+	for _, c := range cases {
+		bucketErr = c.bucketErr
+		if _, err := b.Stat(ctx, "k"); !errors.Is(err, c.want) {
+			t.Errorf("%s: Stat err = %v, want %v", c.name, err, c.want)
+		}
+	}
+	if n := a.called("HeadBucket"); n != len(cases) {
+		t.Errorf("HeadBucket called %d times, want one per not-found Stat (%d)", n, len(cases))
+	}
+
+	a.headObject = func(*s3.HeadObjectInput) (*s3.HeadObjectOutput, error) {
+		return nil, statusError(http.StatusForbidden)
+	}
+	if _, err := b.Stat(ctx, "k"); !errors.Is(err, objex.ErrPermission) {
+		t.Errorf("Stat forbidden: err = %v, want ErrPermission", err)
+	}
+	if n := a.called("HeadBucket"); n != len(cases) {
+		t.Errorf("a forbidden Stat made a HeadBucket request")
+	}
+}
+
 func TestGetUsesContentRangeTotal(t *testing.T) {
 	var got *s3.GetObjectInput
 	a := &fakeAPI{getObject: func(in *s3.GetObjectInput) (*s3.GetObjectOutput, error) {

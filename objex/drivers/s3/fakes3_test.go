@@ -657,6 +657,18 @@ func TestBucketOperationsOnMissingBucket(t *testing.T) {
 	c := newFakeClient(newFakeS3())
 	b := c.Bucket("absent")
 
+	if _, err := b.Put(ctx, "k", strings.NewReader("x")); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Put: err = %v, want ErrBucketNotFound", err)
+	}
+	if _, err := b.Get(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Get: err = %v, want ErrBucketNotFound", err)
+	}
+	if _, err := b.Stat(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) || errors.Is(err, objex.ErrNotFound) {
+		t.Errorf("Stat: err = %v, want ErrBucketNotFound only", err)
+	}
+	if _, err := b.Copy(ctx, "a", "b"); !errors.Is(err, objex.ErrBucketNotFound) || errors.Is(err, objex.ErrNotFound) {
+		t.Errorf("Copy: err = %v, want ErrBucketNotFound only", err)
+	}
 	if err := b.Delete(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) {
 		t.Errorf("Delete: err = %v, want ErrBucketNotFound", err)
 	}

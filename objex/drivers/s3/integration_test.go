@@ -188,6 +188,32 @@ func TestIntegrationRangeHugeLength(t *testing.T) {
 	}
 }
 
+func TestIntegrationMissingBucket(t *testing.T) {
+	b := integrationClient(t).Bucket(uniqueBucketName(t))
+	ctx := context.Background()
+
+	if _, err := b.Put(ctx, "k", strings.NewReader("x")); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Put: err = %v, want ErrBucketNotFound", err)
+	}
+	if _, err := b.Get(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Get: err = %v, want ErrBucketNotFound", err)
+	}
+	if _, err := b.Stat(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Stat: err = %v, want ErrBucketNotFound", err)
+	}
+	if err := b.Delete(ctx, "k"); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Delete: err = %v, want ErrBucketNotFound", err)
+	}
+	if _, err := b.Copy(ctx, "a", "b"); !errors.Is(err, objex.ErrBucketNotFound) {
+		t.Errorf("Copy: err = %v, want ErrBucketNotFound", err)
+	}
+	for _, err := range b.List(ctx) {
+		if !errors.Is(err, objex.ErrBucketNotFound) {
+			t.Errorf("List: err = %v, want ErrBucketNotFound", err)
+		}
+	}
+}
+
 // hidden hides every method but Read so the driver cannot learn the size.
 type hidden struct{ r io.Reader }
 
