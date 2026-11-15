@@ -98,7 +98,9 @@ Strings convert to numbers, booleans, durations, and types that implement
 `encoding.TextUnmarshaler`, so a value from the environment can be read as
 an `int`. `Decode` matches struct fields by their `settings:"name"` tag or
 by field name. Fields with no matching key keep their current value, which
-lets a pre-filled struct hold defaults. An empty path reads the whole tree.
+lets a pre-filled struct hold defaults. A pre-filled map with string keys,
+including `map[string]any`, keeps the entries the configuration does not
+set, and nested maps merge key by key. An empty path reads the whole tree.
 
 ## Cancellation
 
