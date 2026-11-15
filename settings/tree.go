@@ -6,13 +6,16 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 // normalize converts a value from a source into the canonical tree: maps
 // become map[string]any with lowercase keys, slices and arrays become []any,
 // built-in integers become int64 (or uint64 beyond int64), float32 becomes
-// float64, and json.Number becomes int64 or float64. Other values are kept.
+// float64, and json.Number becomes int64, uint64, or float64, keeping its
+// text when it is an integer beyond uint64 or a number beyond float64.
+// Other values are kept.
 // The result shares no maps or slices with the input.
 func normalize(v any) any {
 	switch t := v.(type) {
@@ -39,13 +42,7 @@ func normalize(v any) any {
 	case float32:
 		return float64(t)
 	case json.Number:
-		if i, err := t.Int64(); err == nil {
-			return i
-		}
-		if f, err := t.Float64(); err == nil {
-			return f
-		}
-		return t.String()
+		return normalizeNumber(t)
 	}
 	rv := reflect.ValueOf(v)
 	switch rv.Kind() {
@@ -59,6 +56,26 @@ func normalize(v any) any {
 		return out
 	}
 	return v
+}
+
+// normalizeNumber keeps integers exact: an integer becomes int64, or uint64
+// beyond int64, and an integer outside both ranges keeps its decimal text.
+// Other numbers become float64, or keep their text when out of range.
+func normalizeNumber(n json.Number) any {
+	s := n.String()
+	if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return i
+	}
+	if u, err := strconv.ParseUint(s, 10, 64); err == nil {
+		return u
+	}
+	if digits := strings.TrimLeft(s, "+-"); digits != "" && strings.Trim(digits, "0123456789") == "" {
+		return s
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	return s
 }
 
 func normalizeUint(u uint64) any {
