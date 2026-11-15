@@ -59,7 +59,7 @@ func assign(dst reflect.Value, src any, path string) error {
 	if s, ok := src.(string); ok {
 		if u, ok := dst.Addr().Interface().(encoding.TextUnmarshaler); ok {
 			if err := u.UnmarshalText([]byte(s)); err != nil {
-				return &Error{Path: path, Err: fmt.Errorf("%w: %w", ErrType, err)}
+				return &Error{Path: path, Err: &textError{msg: typeMessage(src, dst.Type()), cause: err}}
 			}
 			return nil
 		}
@@ -203,8 +203,30 @@ func join(path, key string) string {
 	return path + "." + key
 }
 
+// typeError reports that src cannot convert to t. The message names src's
+// type and never its value, which may be a secret.
 func typeError(path string, src any, t reflect.Type) error {
-	return &Error{Path: path, Err: fmt.Errorf("%w: cannot use %T value %v as %s", ErrType, src, src, t)}
+	return &Error{Path: path, Err: fmt.Errorf("%w: %s", ErrType, typeMessage(src, t))}
+}
+
+func typeMessage(src any, t reflect.Type) string {
+	return fmt.Sprintf("cannot use %T value as %s", src, t)
+}
+
+// textError reports a failed encoding.TextUnmarshaler. Its message leaves
+// out the cause's text, which may quote the value, and it matches both
+// ErrType and the cause.
+type textError struct {
+	msg   string
+	cause error
+}
+
+func (e *textError) Error() string {
+	return ErrType.Error() + ": " + e.msg
+}
+
+func (e *textError) Unwrap() []error {
+	return []error{ErrType, e.cause}
 }
 
 func toBool(v reflect.Value) (bool, bool) {

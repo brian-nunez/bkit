@@ -346,3 +346,51 @@ func TestDecodeErrors(t *testing.T) {
 		t.Fatalf("embedded: err = %v", err)
 	}
 }
+
+// errEmpty is the cause secretText.UnmarshalText wraps.
+var errEmpty = errors.New("empty")
+
+// secretText rejects every value with an error that quotes it.
+type secretText string
+
+func (s *secretText) UnmarshalText(b []byte) error {
+	return fmt.Errorf("bad value %q: %w", b, errEmpty)
+}
+
+func TestErrorsOmitValues(t *testing.T) {
+	cfg := load(t, map[string]any{"db": map[string]any{"password": "hunter2", "host": "db.local"}})
+
+	tests := []struct {
+		name string
+		err  func() error
+		want string
+	}{
+		{"scalar", func() error { _, err := settings.Get[int](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as int"},
+		{"duration", func() error { _, err := settings.Get[time.Duration](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as time.Duration"},
+		{"section", func() error { var s struct{ DB string }; return cfg.Decode(&s) },
+			"settings: key db: type mismatch: cannot use map[string]interface {} value as string"},
+		{"text", func() error { _, err := settings.Get[secretText](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as settings_test.secretText"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.err()
+			if !errors.Is(err, settings.ErrType) {
+				t.Fatalf("err = %v, want ErrType", err)
+			}
+			if got := err.Error(); got != tt.want {
+				t.Fatalf("err = %q, want %q", got, tt.want)
+			}
+			if strings.Contains(err.Error(), "hunter2") || strings.Contains(err.Error(), "db.local") {
+				t.Fatalf("error message contains a value: %q", err)
+			}
+		})
+	}
+
+	_, err := settings.Get[secretText](cfg, "db.password")
+	if !errors.Is(err, errEmpty) {
+		t.Fatalf("err = %v, want the TextUnmarshaler cause in the chain", err)
+	}
+}

@@ -120,6 +120,11 @@ them with `errors.Is`:
 The source's original error stays in the chain. For example, a missing file
 matches `fs.ErrNotExist`.
 
+A conversion error names the key path and the value's type. It never
+includes the value, so a secret read as the wrong type stays out of logs.
+An `encoding.TextUnmarshaler` error stays in the chain, and its text is left
+out of the message.
+
 ## Development
 
 From the repository root:
