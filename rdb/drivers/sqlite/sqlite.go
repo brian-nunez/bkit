@@ -125,6 +125,13 @@ func pragmaName(p string) string {
 // sqliteDrv opens SQLite connections.
 var sqliteDrv = &msqlite.Driver{}
 
+// openConn opens one SQLite connection. Tests replace it.
+var openConn = sqliteDrv.Open
+
+// errConnType reports a SQLite connection that lacks a driver interface the
+// read-only wrapper forwards.
+var errConnType = errors.New("sqlite: unexpected driver connection type")
+
 // connector opens connections to one database.
 type connector struct {
 	dsn string
@@ -135,10 +142,88 @@ func (c connector) Connect(ctx context.Context) (driver.Conn, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return sqliteDrv.Open(c.dsn)
+	raw, err := openConn(c.dsn)
+	if err != nil {
+		return nil, err
+	}
+	sc, ok := raw.(sqliteConn)
+	if !ok {
+		_ = raw.Close()
+		return nil, errConnType
+	}
+	return &conn{sqliteConn: sc}, nil
 }
 
 // Driver returns the underlying SQLite driver.
 func (connector) Driver() driver.Driver {
 	return sqliteDrv
+}
+
+// sqliteConn is the set of driver interfaces a SQLite connection implements.
+// conn forwards all of them, so database/sql uses the connection exactly as
+// it would unwrapped.
+type sqliteConn interface {
+	driver.Conn
+	driver.ConnBeginTx
+	driver.ConnPrepareContext
+	driver.ExecerContext
+	driver.QueryerContext
+	driver.Pinger
+	driver.SessionResetter
+	driver.Validator
+}
+
+// conn makes read-only transactions read-only. The SQLite driver begins every
+// transaction the same way, so conn turns on PRAGMA query_only for a
+// read-only one and turns it off again when the transaction ends.
+type conn struct {
+	sqliteConn
+
+	// broken records that query_only could not be turned off, so the pool
+	// must discard the connection.
+	broken bool
+}
+
+// BeginTx begins a transaction, read-only when opts asks for one.
+func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	tx, err := c.sqliteConn.BeginTx(ctx, opts)
+	if err != nil || !opts.ReadOnly {
+		return tx, err
+	}
+	if _, err := c.ExecContext(ctx, "PRAGMA query_only = 1", nil); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return &readOnlyTx{Tx: tx, conn: c}, nil
+}
+
+// IsValid reports whether the pool may reuse the connection.
+func (c *conn) IsValid() bool {
+	return !c.broken && c.sqliteConn.IsValid()
+}
+
+// readOnlyTx turns query_only off when its transaction ends.
+type readOnlyTx struct {
+	driver.Tx
+	conn *conn
+}
+
+// Commit commits the transaction.
+func (t *readOnlyTx) Commit() error {
+	return t.end(t.Tx.Commit())
+}
+
+// Rollback rolls the transaction back.
+func (t *readOnlyTx) Rollback() error {
+	return t.end(t.Tx.Rollback())
+}
+
+// end turns query_only off and returns err, the transaction's result. When
+// query_only stays on, the connection is marked broken so the pool closes it
+// instead of handing it to a writer.
+func (t *readOnlyTx) end(err error) error {
+	if _, resetErr := t.conn.ExecContext(context.Background(), "PRAGMA query_only = 0", nil); resetErr != nil {
+		t.conn.broken = true
+	}
+	return err
 }

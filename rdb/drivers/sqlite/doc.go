@@ -14,6 +14,9 @@
 // parameters pass to the SQLite driver, so ?_pragma=busy_timeout(1000)
 // overrides a default.
 //
+// A read-only transaction, started with rdb.ReadOnly, turns on PRAGMA
+// query_only until it ends, so a write inside it fails.
+//
 // Errors match rdb.ErrUniqueViolation, rdb.ErrForeignKeyViolation,
 // rdb.ErrNotNullViolation, rdb.ErrCheckViolation, and, for a busy or locked
 // database, rdb.ErrRetryable.

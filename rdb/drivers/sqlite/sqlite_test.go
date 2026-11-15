@@ -2,10 +2,12 @@ package sqlite
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/brian-nunez/bkit/rdb"
@@ -204,3 +206,129 @@ func TestConnector(t *testing.T) {
 		t.Fatalf("Connect err = %v, want Canceled", err)
 	}
 }
+
+func TestReadOnlyTx(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, "sqlite::memory:") // one connection, so every step reuses it
+	if _, err := db.Exec(ctx, "CREATE TABLE t (n INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	insert := func(q rdb.Querier) error {
+		_, err := q.Exec(ctx, "INSERT INTO t VALUES (1)")
+		return err
+	}
+
+	errStop := errors.New("stop")
+	for _, end := range []error{nil, errStop} { // commit, then rollback
+		err := db.Tx(ctx, func(tx *rdb.Tx) error {
+			if _, err := rdb.One[int](ctx, tx, "SELECT count(*) FROM t"); err != nil {
+				t.Errorf("read in read-only tx: %v", err)
+			}
+			if err := insert(tx); err == nil || !strings.Contains(err.Error(), "readonly") {
+				t.Errorf("write in read-only tx: err = %v, want a readonly error", err)
+			}
+			return end
+		}, rdb.ReadOnly())
+		if !errors.Is(err, end) {
+			t.Fatalf("Tx err = %v, want %v", err, end)
+		}
+		if got := pragma[int](t, db, "query_only"); got != 0 {
+			t.Errorf("query_only = %d after the read-only tx, want 0", got)
+		}
+		if err := insert(db); err != nil {
+			t.Errorf("write after the read-only tx: %v", err)
+		}
+	}
+
+	if err := db.Tx(ctx, func(tx *rdb.Tx) error { return insert(tx) }); err != nil {
+		t.Errorf("read-write tx: %v", err)
+	}
+}
+
+// failingConn fails ExecContext for one query.
+type failingConn struct {
+	sqliteConn
+	fail string
+}
+
+func (c failingConn) ExecContext(ctx context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
+	if q == c.fail {
+		return nil, errors.New("exec failed")
+	}
+	return c.sqliteConn.ExecContext(ctx, q, args)
+}
+
+func rawConn(t *testing.T) sqliteConn {
+	t.Helper()
+	raw, err := sqliteDrv.Open(memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	return raw.(sqliteConn)
+}
+
+func TestReadOnlyTxFailures(t *testing.T) {
+	ctx := context.Background()
+	ro := driver.TxOptions{ReadOnly: true}
+
+	// The begin itself fails: a transaction is already open.
+	c := &conn{sqliteConn: rawConn(t)}
+	tx, err := c.BeginTx(ctx, driver.TxOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.BeginTx(ctx, ro); err == nil {
+		t.Error("nested BeginTx succeeded")
+	}
+	_ = tx.Rollback()
+
+	// Turning query_only on fails: the transaction is rolled back.
+	c = &conn{sqliteConn: failingConn{sqliteConn: rawConn(t), fail: "PRAGMA query_only = 1"}}
+	if _, err := c.BeginTx(ctx, ro); err == nil {
+		t.Fatal("BeginTx succeeded")
+	}
+	tx, err = c.BeginTx(ctx, driver.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx after a failed read-only begin: %v (the first was not rolled back)", err)
+	}
+	_ = tx.Rollback()
+	if !c.IsValid() {
+		t.Error("connection invalid after a failed begin")
+	}
+
+	// Turning query_only off fails: the pool must discard the connection.
+	c = &conn{sqliteConn: failingConn{sqliteConn: rawConn(t), fail: "PRAGMA query_only = 0"}}
+	tx, err = c.BeginTx(ctx, ro)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+	if c.IsValid() {
+		t.Error("connection still valid with query_only left on")
+	}
+}
+
+func TestConnectFailures(t *testing.T) {
+	ctx := context.Background()
+	missing := filepath.Join(t.TempDir(), "no", "such", "x.db")
+	if _, err := (connector{dsn: missing}).Connect(ctx); err == nil {
+		t.Error("Connect to a missing directory succeeded")
+	}
+
+	defer func(orig func(string) (driver.Conn, error)) { openConn = orig }(openConn)
+	closed := false
+	openConn = func(string) (driver.Conn, error) { return plainConn{closed: &closed}, nil }
+	if _, err := (connector{dsn: memory}).Connect(ctx); !errors.Is(err, errConnType) || !closed {
+		t.Errorf("Connect err = %v, closed = %v; want errConnType and a closed connection", err, closed)
+	}
+}
+
+// plainConn implements only driver.Conn.
+type plainConn struct{ closed *bool }
+
+func (plainConn) Prepare(string) (driver.Stmt, error) { return nil, errors.New("no prepare") }
+func (plainConn) Begin() (driver.Tx, error)           { return nil, errors.New("no begin") }
+func (c plainConn) Close() error                      { *c.closed = true; return nil }
