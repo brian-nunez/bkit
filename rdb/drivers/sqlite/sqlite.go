@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"fmt"
@@ -284,8 +285,17 @@ type conn struct {
 	broken bool
 }
 
-// BeginTx begins a transaction, read-only when opts asks for one.
+// BeginTx begins a transaction, read-only when opts asks for one. SQLite
+// transactions are serializable, which satisfies every weaker standard
+// level, and readers see a snapshot. Any other level fails, as it does in
+// the Postgres and MySQL drivers.
 func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+	switch sql.IsolationLevel(opts.Isolation) {
+	case sql.LevelDefault, sql.LevelReadUncommitted, sql.LevelReadCommitted,
+		sql.LevelRepeatableRead, sql.LevelSnapshot, sql.LevelSerializable:
+	default:
+		return nil, fmt.Errorf("sqlite: unsupported isolation level: %v", opts.Isolation)
+	}
 	tx, err := c.sqliteConn.BeginTx(ctx, opts)
 	if err != nil || !opts.ReadOnly {
 		return tx, err

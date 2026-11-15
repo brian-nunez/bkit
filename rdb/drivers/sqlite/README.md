@@ -66,6 +66,10 @@ sqlite:app.db?_pragma=busy_timeout(1000)&_pragma=synchronous(NORMAL)
 duration, so a write inside one fails. The driver turns it off when the
 transaction ends.
 
+SQLite transactions are serializable. `rdb.Isolation` accepts every level up
+to `sql.LevelSerializable`, including `sql.LevelSnapshot`, and fails for
+`sql.LevelWriteCommitted` and `sql.LevelLinearizable`.
+
 Writes in SQLite take turns. Under heavy write load, a write can still fail
 with `rdb.ErrRetryable` after the busy timeout.
 

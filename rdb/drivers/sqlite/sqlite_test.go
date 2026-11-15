@@ -387,6 +387,46 @@ func TestReadOnlyTx(t *testing.T) {
 	}
 }
 
+func TestIsolation(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, "sqlite::memory:")
+	tests := []struct {
+		level sql.IsolationLevel
+		ok    bool
+	}{
+		{sql.LevelDefault, true},
+		{sql.LevelReadUncommitted, true},
+		{sql.LevelReadCommitted, true},
+		{sql.LevelWriteCommitted, false},
+		{sql.LevelRepeatableRead, true},
+		{sql.LevelSnapshot, true},
+		{sql.LevelSerializable, true},
+		{sql.LevelLinearizable, false},
+		{sql.LevelLinearizable + 1, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.level.String(), func(t *testing.T) {
+			err := db.Tx(ctx, func(tx *rdb.Tx) error {
+				_, err := rdb.One[int](ctx, tx, "SELECT 1")
+				return err
+			}, rdb.Isolation(tt.level))
+			if tt.ok {
+				if err != nil {
+					t.Fatalf("Tx: %v", err)
+				}
+				return
+			}
+			var e *rdb.Error
+			if !errors.As(err, &e) || e.Op != "begin" || e.Kind != nil || !strings.Contains(err.Error(), "unsupported isolation level") {
+				t.Fatalf("err = %v, want an unclassified begin error for an unsupported level", err)
+			}
+		})
+	}
+	if _, err := rdb.One[int](ctx, db, "SELECT 1"); err != nil {
+		t.Errorf("query after a rejected level: %v", err)
+	}
+}
+
 // failingConn fails ExecContext for one query.
 type failingConn struct {
 	sqliteConn
