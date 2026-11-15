@@ -100,13 +100,6 @@ func (f *faultFS) Remove(name string) error {
 	return f.rootFS.Remove(name)
 }
 
-func (f *faultFS) RemoveAll(name string) error {
-	if err := f.check("removeall", name); err != nil {
-		return err
-	}
-	return f.rootFS.RemoveAll(name)
-}
-
 func (f *faultFS) Rename(oldname, newname string) error {
 	if err := f.check("rename", newname); err != nil {
 		return err
@@ -277,9 +270,53 @@ func TestManagerFailures(t *testing.T) {
 
 	t.Run("DeleteBucketRemoveFails", func(t *testing.T) {
 		c, faults, _ := faultClient(t)
-		faults.fail = failOn("removeall", "bucket", errInjected)
+		faults.fail = failOn("remove", "bucket", errInjected)
 		if err := c.DeleteBucket(ctx, "bucket"); !errors.Is(err, errInjected) {
 			t.Errorf("err = %v, want the remove error", err)
+		}
+	})
+
+	t.Run("DeleteBucketRemovesEmptyDirectories", func(t *testing.T) {
+		c, _, dir := faultClient(t)
+		if err := os.MkdirAll(filepath.Join(dir, "bucket", "a", "b"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := c.DeleteBucket(ctx, "bucket"); err != nil {
+			t.Fatalf("DeleteBucket: %v", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "bucket")); !errors.Is(err, os.ErrNotExist) {
+			t.Errorf("bucket directory remains: %v", err)
+		}
+	})
+
+	t.Run("DeleteBucketNestedObject", func(t *testing.T) {
+		c, _, _ := faultClient(t)
+		put(t, c.Bucket("bucket"), "a/b/k", "x")
+		if err := c.DeleteBucket(ctx, "bucket"); !errors.Is(err, objex.ErrBucketNotEmpty) {
+			t.Errorf("err = %v, want ErrBucketNotEmpty", err)
+		}
+	})
+
+	t.Run("DeleteBucketKeepsConcurrentPut", func(t *testing.T) {
+		c, faults, dir := faultClient(t)
+		b := c.Bucket("bucket")
+		if err := os.MkdirAll(filepath.Join(dir, "bucket", "a"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		// The object lands after DeleteBucket has found the bucket empty and
+		// removed bucket/a, just before it removes the bucket itself.
+		faults.fail = func(op, name string) error {
+			if op == "remove" && name == "bucket" {
+				faults.fail = nil
+				put(t, b, "late", "x")
+			}
+			return nil
+		}
+		if err := c.DeleteBucket(ctx, "bucket"); !errors.Is(err, objex.ErrBucketNotEmpty) {
+			t.Errorf("err = %v, want ErrBucketNotEmpty", err)
+		}
+		if _, err := os.Stat(filepath.Join(dir, "bucket", "late")); err != nil {
+			t.Errorf("DeleteBucket destroyed an object written before it returned: %v", err)
 		}
 	})
 

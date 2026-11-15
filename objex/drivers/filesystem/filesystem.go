@@ -118,7 +118,6 @@ type rootFS interface {
 	Open(name string) (file, error)
 	OpenFile(name string, flag int, perm fs.FileMode) (file, error)
 	Remove(name string) error
-	RemoveAll(name string) error
 	Rename(oldname, newname string) error
 	Stat(name string) (fs.FileInfo, error)
 }
@@ -185,25 +184,42 @@ func (c *Client) DeleteBucket(ctx context.Context, name string) error {
 	if err := c.requireBucket(op, name, ""); err != nil {
 		return err
 	}
-	hasObject := false
-	err := fs.WalkDir(c.root.FS(), name, func(_ string, d fs.DirEntry, err error) error {
-		if err != nil {
+	switch err := c.removeEmptyDirs(name); {
+	case err == nil:
+		return nil
+	case errors.Is(err, errDirNotEmpty):
+		return objex.NewError(op, name, "", objex.ErrBucketNotEmpty, nil)
+	default:
+		return objex.NewError(op, name, "", kindOf(err), err)
+	}
+}
+
+// errDirNotEmpty reports that removeEmptyDirs found something other than a
+// directory.
+var errDirNotEmpty = errors.New("directory is not empty")
+
+// removeEmptyDirs removes dir and every directory under it, deepest first.
+// It removes each directory with Remove, which fails on a non-empty
+// directory, so an object written concurrently is never deleted: it returns
+// errDirNotEmpty instead, leaving the object and its parents in place.
+func (c *Client) removeEmptyDirs(dir string) error {
+	entries, err := fs.ReadDir(c.root.FS(), dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			return errDirNotEmpty
+		}
+		if err := c.removeEmptyDirs(dir + "/" + entry.Name()); err != nil {
 			return err
 		}
-		if !d.IsDir() {
-			hasObject = true
-			return fs.SkipAll
+	}
+	if err := c.root.Remove(filepath.FromSlash(dir)); err != nil {
+		if errors.Is(err, syscall.ENOTEMPTY) || errors.Is(err, fs.ErrExist) {
+			return errDirNotEmpty
 		}
-		return nil
-	})
-	if err != nil {
-		return objex.NewError(op, name, "", kindOf(err), err)
-	}
-	if hasObject {
-		return objex.NewError(op, name, "", objex.ErrBucketNotEmpty, nil)
-	}
-	if err := c.root.RemoveAll(name); err != nil {
-		return objex.NewError(op, name, "", kindOf(err), err)
+		return err
 	}
 	return nil
 }
