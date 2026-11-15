@@ -24,6 +24,7 @@ tags, so you import exactly the pieces you use.
 | [rdb/drivers/sqlite](rdb/drivers/sqlite) | `github.com/brian-nunez/bkit/rdb/drivers/sqlite` | rdb driver for SQLite |
 | [rdb/drivers/postgres](rdb/drivers/postgres) | `github.com/brian-nunez/bkit/rdb/drivers/postgres` | rdb driver for PostgreSQL, built on pgx |
 | [rdb/drivers/mysql](rdb/drivers/mysql) | `github.com/brian-nunez/bkit/rdb/drivers/mysql` | rdb driver for MySQL and MariaDB |
+| [stash](stash) | `github.com/brian-nunez/bkit/stash` | One API over key-value stores, with expiry, atomic operations, and typed values |
 
 Drivers are nested modules under their parent, imported as
 `github.com/brian-nunez/bkit/<module>/drivers/<driver>`.
