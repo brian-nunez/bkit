@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io"
 	"io/fs"
 	"iter"
@@ -29,6 +30,7 @@ const (
 	filePerm           = 0o644
 	defaultContentType = "application/octet-stream"
 	minSigningKeyBytes = 32
+	writeLockStripes   = 64
 )
 
 // Option configures a Client.
@@ -75,9 +77,11 @@ type Client struct {
 	signingKey []byte
 	now        func() time.Time
 
-	// conditional serializes conditional writes so their check-then-write
-	// sequence is atomic within the process.
-	conditional sync.Mutex
+	// writeLocks guard object paths, each path hashed to one stripe. Writes
+	// and deletes hold their paths' stripes shared, and conditional writes
+	// hold theirs exclusively, so a condition's check and its write are
+	// atomic with respect to every other write in the process.
+	writeLocks [writeLockStripes]sync.RWMutex
 }
 
 var _ objex.Manager = (*Client)(nil)
@@ -402,14 +406,17 @@ func (b *Bucket) commit(op, key, tmp string, ifNotExists bool, ifMatch string) e
 	rename := func() error { return c.root.Rename(tmp, dst) }
 
 	if !ifNotExists && ifMatch == "" {
+		unlock := c.lockShared(dst)
+		defer unlock()
 		if err := b.placeFile(dst, rename); err != nil {
 			return objex.NewError(op, b.name, key, pathConflictKind(err), err)
 		}
 		return nil
 	}
 
-	c.conditional.Lock()
-	defer c.conditional.Unlock()
+	lock := &c.writeLocks[writeLockStripe(dst)]
+	lock.Lock()
+	defer lock.Unlock()
 
 	if ifNotExists {
 		// A hard link fails if dst exists, which keeps create-only writes
@@ -445,6 +452,34 @@ func (b *Bucket) commit(op, key, tmp string, ifNotExists bool, ifMatch string) e
 		return objex.NewError(op, b.name, key, pathConflictKind(err), err)
 	}
 	return nil
+}
+
+// writeLockStripe returns the index of the write lock that guards the
+// root-relative object path p.
+func writeLockStripe(p string) uint32 {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(p))
+	return h.Sum32() % writeLockStripes
+}
+
+// lockShared holds the write locks of paths shared, taking them in index
+// order so concurrent callers cannot deadlock, and returns a function that
+// releases them.
+func (c *Client) lockShared(paths ...string) (unlock func()) {
+	stripes := make([]uint32, 0, len(paths))
+	for _, p := range paths {
+		stripes = append(stripes, writeLockStripe(p))
+	}
+	slices.Sort(stripes)
+	stripes = slices.Compact(stripes)
+	for _, i := range stripes {
+		c.writeLocks[i].RLock()
+	}
+	return func() {
+		for _, i := range stripes {
+			c.writeLocks[i].RUnlock()
+		}
+	}
 }
 
 // placeRetries bounds how many times a write recreates its destination's
@@ -598,7 +633,10 @@ func (b *Bucket) Delete(ctx context.Context, key string) error {
 	if stat.IsDir() {
 		return b.client.requireBucket(op, b.name, key)
 	}
-	if err := b.client.root.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	unlock := b.client.lockShared(p)
+	err = b.client.root.Remove(p)
+	unlock()
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return objex.NewError(op, b.name, key, kindOf(err), err)
 	}
 	b.pruneEmptyParents(key)
@@ -757,7 +795,10 @@ func (b *Bucket) Move(ctx context.Context, dst, src string) (objex.ObjectInfo, e
 	if err := b.mkdirParents(target); err != nil {
 		return objex.ObjectInfo{}, objex.NewError(op, b.name, dst, pathConflictKind(err), err)
 	}
-	if err := b.placeFile(target, func() error { return b.client.root.Rename(b.objectPath(src), target) }); err != nil {
+	unlock := b.client.lockShared(b.objectPath(src), target)
+	err = b.placeFile(target, func() error { return b.client.root.Rename(b.objectPath(src), target) })
+	unlock()
+	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return objex.ObjectInfo{}, b.missing(op, src, err)
 		}
