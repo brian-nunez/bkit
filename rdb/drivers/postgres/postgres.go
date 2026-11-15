@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"net/url"
 	"strconv"
 
@@ -47,6 +48,9 @@ func (c Config) url() string {
 	u := url.URL{Scheme: "postgres", Host: c.Host, Path: "/" + c.Database}
 	if c.Port != 0 {
 		u.Host = net.JoinHostPort(c.Host, strconv.Itoa(c.Port))
+	} else if ip, err := netip.ParseAddr(c.Host); err == nil && ip.Is6() {
+		// A URL host needs brackets around an IPv6 address.
+		u.Host = "[" + c.Host + "]"
 	}
 	if c.User != "" || c.Password != "" {
 		u.User = url.UserPassword(c.User, c.Password)
