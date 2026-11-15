@@ -149,6 +149,95 @@ func TestInMemoryFreedOnClose(t *testing.T) {
 	}
 }
 
+func TestInMemoryForms(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		url    string
+		shared bool
+	}{
+		{"sqlite:file::memory:", false},
+		{"sqlite:file:%253Amemory%253A", false},
+		{"sqlite:file:named?mode=memory", false},
+		{"sqlite:file:named?mode=ro&mode=memory", false},
+		{"sqlite:file:named?mode=memory&cache=shared&cache=private", false},
+		{"sqlite:file::memory:?vfs=memdb", false},
+		{"sqlite:named?vfs=memdb", false},
+		{"sqlite:file:named?vfs=memdb", false},
+		{"sqlite:file:shared-a?mode=memory&cache=shared", true},
+		{"sqlite:file:shared-b?vfs=memdb&cache=shared", true},
+		{"sqlite:file:/shared-c?vfs=memdb", true},
+		{"sqlite:file:///shared-d?vfs=memdb", true},
+		{"sqlite:///shared-e?vfs=memdb", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.url, func(t *testing.T) {
+			db := open(t, tt.url)
+			if got := db.Stats().MaxOpenConnections; got != 1 {
+				t.Errorf("MaxOpenConnections = %d, want 1", got)
+			}
+			if got := pragma[string](t, db, "journal_mode"); got != "memory" {
+				t.Errorf("journal_mode = %q, want memory", got)
+			}
+			db.SQL().SetMaxIdleConns(0) // a new connection for every statement
+			for _, q := range []string{"CREATE TABLE t (n INTEGER)", "INSERT INTO t VALUES (1)"} {
+				if _, err := db.Exec(ctx, q); err != nil {
+					t.Fatalf("%s: %v", q, err)
+				}
+			}
+			if n, err := rdb.One[int](ctx, db, "SELECT count(*) FROM t"); err != nil || n != 1 {
+				t.Fatalf("count = %d, %v; want 1, nil", n, err)
+			}
+
+			other := open(t, tt.url)
+			_, err := other.Exec(ctx, "SELECT * FROM t")
+			if tt.shared && err != nil {
+				t.Errorf("a second DB on a shared name: %v", err)
+			}
+			if !tt.shared && err == nil {
+				t.Error("a second DB sees a private database's table")
+			}
+		})
+	}
+	if _, err := rdb.Open(ctx, "sqlite:file::memory:", Driver(), rdb.WithMaxOpenConns(2)); !errors.Is(err, rdb.ErrInvalidOption) {
+		t.Errorf("err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestMemoryDB(t *testing.T) {
+	tests := []struct {
+		path, query      string
+		inMemory, shared bool
+	}{
+		{"", "", true, false},
+		{memory, "", true, false},
+		{memory, "cache=shared", true, false},
+		{"file::memory:", "cache=shared", true, true},
+		{"file:%3Amemory%3A", "", true, false},
+		{"file:a%zz", "mode=memory", true, false},
+		{"file:a", "mode=memory&cache=shared", true, true},
+		{"file:a", "mode=Memory", false, false},
+		{"file:a", "cache=shared", false, false},
+		{"a", "mode=memory", false, false},
+		{"/a", "vfs=memdb", true, true},
+		{"a", "vfs=memdb", true, false},
+		{"file://localhost/a", "vfs=memdb", true, true},
+		{"file://localhost", "vfs=memdb", true, false},
+		{"file:///:memory:", "", false, false},
+		{"app.db", "", false, false},
+		{"file:app.db", "", false, false},
+	}
+	for _, tt := range tests {
+		q, err := url.ParseQuery(tt.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		inMemory, shared := memoryDB(tt.path, q)
+		if inMemory != tt.inMemory || shared != tt.shared {
+			t.Errorf("memoryDB(%q, %q) = %v, %v; want %v, %v", tt.path, tt.query, inMemory, shared, tt.inMemory, tt.shared)
+		}
+	}
+}
+
 func TestTypedOpen(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "typed.db")

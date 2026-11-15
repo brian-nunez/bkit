@@ -34,6 +34,8 @@ db, err := sqlite.Open(ctx, sqlite.Config{Path: "app.db"}, rdb.WithMaxOpenConns(
 | `sqlite:app.db` | `app.db`, relative to the working directory |
 | `sqlite:///var/lib/app/app.db` | An absolute path |
 | `sqlite::memory:` or `sqlite:` | A private in-memory database |
+| `sqlite:file::memory:` or `sqlite:file:name?mode=memory` | A private in-memory database |
+| `sqlite:file:name?mode=memory&cache=shared` | An in-memory database shared by every connection in the process that opens `name` |
 
 The `sqlite3:` scheme works too. Missing database files are created.
 
@@ -47,7 +49,8 @@ Every connection runs these pragmas:
 | `busy_timeout` | `5000` | Waits up to 5 seconds for a lock before failing |
 | `journal_mode` | `WAL` | File databases only. Readers run alongside a writer. |
 
-An in-memory database is limited to one connection. Asking for more with
+An in-memory database, in any form SQLite accepts, including the `memdb`
+VFS, is limited to one connection. Asking for more with
 `rdb.WithMaxOpenConns` fails with `rdb.ErrInvalidOption`. The database keeps
 its data until the `rdb.DB` is closed, even when the pool replaces the
 connection, such as after `rdb.WithConnMaxLifetime` expires.
