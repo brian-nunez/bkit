@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"errors"
 	"net/url"
@@ -93,6 +94,58 @@ func TestInMemory(t *testing.T) {
 	_, err := rdb.Open(ctx, "sqlite::memory:", Driver(), rdb.WithMaxOpenConns(2))
 	if !errors.Is(err, rdb.ErrInvalidOption) {
 		t.Errorf("err = %v, want ErrInvalidOption", err)
+	}
+}
+
+func TestInMemoryOutlivesConnections(t *testing.T) {
+	ctx := context.Background()
+	db := open(t, "sqlite::memory:")
+	// With no idle connections allowed, the pool closes the connection after
+	// every statement, so each statement runs on a new one.
+	db.SQL().SetMaxIdleConns(0)
+	for _, q := range []string{"CREATE TABLE t (n INTEGER)", "INSERT INTO t VALUES (1)"} {
+		if _, err := db.Exec(ctx, q); err != nil {
+			t.Fatalf("%s: %v", q, err)
+		}
+	}
+	if n, err := rdb.One[int](ctx, db, "SELECT count(*) FROM t"); err != nil || n != 1 {
+		t.Fatalf("count = %d, %v; want 1, nil", n, err)
+	}
+	if got := db.Stats().MaxIdleClosed; got < 2 {
+		t.Errorf("MaxIdleClosed = %d, want at least 2 replaced connections", got)
+	}
+	if got := pragma[int](t, db, "foreign_keys"); got != 1 {
+		t.Errorf("foreign_keys = %d, want 1", got)
+	}
+
+	other := open(t, "sqlite::memory:")
+	if _, err := other.Exec(ctx, "SELECT * FROM t"); err == nil {
+		t.Error("a second in-memory database sees the first one's table")
+	}
+}
+
+func TestInMemoryFreedOnClose(t *testing.T) {
+	ctx := context.Background()
+	c := connection(memory, nil).Connector.(*connector)
+	db := sql.OpenDB(c)
+	if _, err := db.ExecContext(ctx, "CREATE TABLE t (n INTEGER)"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.Connect(ctx); !errors.Is(err, errClosed) {
+		t.Errorf("Connect after Close: err = %v, want errClosed", err)
+	}
+	if err := c.Close(); err != nil {
+		t.Errorf("second Close: %v", err)
+	}
+
+	after := sql.OpenDB(&connector{dsn: c.dsn})
+	defer after.Close()
+	var n int
+	if err := after.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&n); err != nil || n != 0 {
+		t.Errorf("tables after Close = %d, %v; want 0, nil", n, err)
 	}
 }
 
@@ -314,14 +367,17 @@ func TestReadOnlyTxFailures(t *testing.T) {
 func TestConnectFailures(t *testing.T) {
 	ctx := context.Background()
 	missing := filepath.Join(t.TempDir(), "no", "such", "x.db")
-	if _, err := (connector{dsn: missing}).Connect(ctx); err == nil {
+	if _, err := (&connector{dsn: missing}).Connect(ctx); err == nil {
 		t.Error("Connect to a missing directory succeeded")
+	}
+	if _, err := (&connector{dsn: missing, keepAlive: true}).Connect(ctx); err == nil {
+		t.Error("Connect with a keep-alive to a missing directory succeeded")
 	}
 
 	defer func(orig func(string) (driver.Conn, error)) { openConn = orig }(openConn)
 	closed := false
 	openConn = func(string) (driver.Conn, error) { return plainConn{closed: &closed}, nil }
-	if _, err := (connector{dsn: memory}).Connect(ctx); !errors.Is(err, errConnType) || !closed {
+	if _, err := (&connector{dsn: memory}).Connect(ctx); !errors.Is(err, errConnType) || !closed {
 		t.Errorf("Connect err = %v, closed = %v; want errConnType and a closed connection", err, closed)
 	}
 }

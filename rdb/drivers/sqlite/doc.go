@@ -9,8 +9,9 @@
 //
 // Every connection turns on foreign keys and waits up to five seconds for a
 // lock. File databases use write-ahead logging, so readers run alongside a
-// writer. An in-memory database is limited to one connection, because each
-// connection to ":memory:" would see its own empty database. URL query
+// writer. An in-memory database is limited to one connection and keeps its
+// data until the rdb.DB is closed, even when the pool replaces that
+// connection. URL query
 // parameters pass to the SQLite driver, so ?_pragma=busy_timeout(1000)
 // overrides a default.
 //
