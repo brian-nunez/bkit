@@ -25,6 +25,8 @@ func TestRebindDollar(t *testing.T) {
 		{"dollar quote", "SELECT $$ ? $$, ?", "SELECT $$ ? $$, $1"},
 		{"tagged dollar quote", "SELECT $fn$ ? $x$ ? $fn$, ?", "SELECT $fn$ ? $x$ ? $fn$, $1"},
 		{"tag with digits", "SELECT $a1$ ? $a1$, ?", "SELECT $a1$ ? $a1$, $1"},
+		{"dollar in identifier", "SELECT a$b$c FROM t WHERE x = ?", "SELECT a$b$c FROM t WHERE x = $1"},
+		{"doubled dollar in identifier", "SELECT a$$b FROM t WHERE x = ? AND y = $$?$$", "SELECT a$$b FROM t WHERE x = $1 AND y = $$?$$"},
 		{"positional parameter", "SELECT $1, ?", "SELECT $1, $1"},
 		{"trailing dollar", "SELECT ?, $", "SELECT $1, $"},
 		{"unterminated tag", "SELECT ?, $abc", "SELECT $1, $abc"},
