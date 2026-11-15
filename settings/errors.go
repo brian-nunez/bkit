@@ -18,7 +18,10 @@ var (
 )
 
 // Error describes a failure to load or read a value. It matches its Err, and
-// any sentinel Err wraps, with errors.Is and errors.As.
+// any sentinel Err wraps, with errors.Is and errors.As. A conversion error
+// names the value's type and never the value, which may be a secret; a
+// failing encoding.TextUnmarshaler's error stays in the chain without its
+// text in the message.
 type Error struct {
 	// Source names the source that failed, if any.
 	Source string
