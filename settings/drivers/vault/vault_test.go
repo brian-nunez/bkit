@@ -187,3 +187,111 @@ func TestTransportError(t *testing.T) {
 		t.Fatal("Load against a closed server succeeded")
 	}
 }
+
+// redirectTo serves a 307 redirect to target for every request.
+func redirectTo(t *testing.T, target string, tls bool) *httptest.Server {
+	t.Helper()
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+	})
+	srv := httptest.NewUnstartedServer(h)
+	if tls {
+		srv.StartTLS()
+	} else {
+		srv.Start()
+	}
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestRedirectToOtherHostKeepsToken(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{"data": {"data": {}}}`)
+	srv := redirectTo(t, otherAddr+"/v1/secret/data/app", false)
+	for name, opts := range map[string][]vault.Option{
+		"default client": {vault.WithToken("s.token")},
+		"caller client":  {vault.WithToken("s.token"), vault.WithHTTPClient(&http.Client{})},
+	} {
+		t.Run(name, func(t *testing.T) {
+			other.last = nil
+			_, err := mustNew(t, srv.URL, opts...).KV2("secret", "app").Load(context.Background())
+			if !errors.Is(err, vault.ErrResponse) || err.Error() != "vault: unexpected response: status 307" {
+				t.Fatalf("err = %v, want ErrResponse with status 307", err)
+			}
+			if other.last != nil {
+				t.Fatalf("redirect to another host followed with token %q", other.last.Header.Get("X-Vault-Token"))
+			}
+		})
+	}
+	if http.DefaultClient.CheckRedirect != nil {
+		t.Fatal("New changed http.DefaultClient")
+	}
+}
+
+func TestRedirectToPlainHTTPKeepsToken(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://"+srv.Listener.Addr().String()+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(srv.Close)
+	client := srv.Client()
+	_, err := mustNew(t, srv.URL, vault.WithToken("s.token"), vault.WithHTTPClient(client)).KV2("secret", "app").Load(context.Background())
+	if !errors.Is(err, vault.ErrResponse) || err.Error() != "vault: unexpected response: status 307" {
+		t.Fatalf("err = %v, want ErrResponse with status 307", err)
+	}
+	if client.CheckRedirect != nil {
+		t.Fatal("New changed the caller's client")
+	}
+}
+
+func TestRedirectSameHost(t *testing.T) {
+	var got string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/secret/data/old", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/v1/secret/data/app", http.StatusTemporaryRedirect)
+	})
+	mux.HandleFunc("/v1/secret/data/app", func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("X-Vault-Token")
+		_, _ = w.Write([]byte(`{"data": {"data": {"name": "web"}}}`))
+	})
+	mux.HandleFunc("/v1/secret/data/loop", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, r.URL.Path, http.StatusTemporaryRedirect)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := mustNew(t, srv.URL, vault.WithToken("s.token"))
+
+	data, err := c.KV2("secret", "old").Load(context.Background())
+	if err != nil || data["name"] != "web" || got != "s.token" {
+		t.Fatalf("Load = %#v, %v, token %q", data, err, got)
+	}
+	if _, err := c.KV2("secret", "loop").Load(context.Background()); err == nil {
+		t.Fatal("redirect loop succeeded")
+	}
+}
+
+func TestRedirectWithoutToken(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{"data": {"data": {}}}`)
+	srv := redirectTo(t, otherAddr+"/v1/secret/data/app", false)
+	if _, err := mustNew(t, srv.URL).KV2("secret", "app").Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if other.last == nil {
+		t.Fatal("redirect without a token not followed")
+	}
+}
+
+func TestRedirectCallerPolicy(t *testing.T) {
+	other, otherAddr := newFake(t, http.StatusOK, `{"data": {"data": {}}}`)
+	srv := redirectTo(t, otherAddr+"/v1/secret/data/app", false)
+	called := false
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error {
+		called = true
+		return nil
+	}}
+	if _, err := mustNew(t, srv.URL, vault.WithToken("s.token"), vault.WithHTTPClient(client)).KV2("secret", "app").Load(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !called || other.last == nil {
+		t.Fatal("caller's CheckRedirect not used")
+	}
+}

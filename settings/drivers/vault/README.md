@@ -55,6 +55,10 @@ file's format.
 Without `WithToken`, no token is sent. This works with a Vault Agent or
 proxy that adds the token. Renewing the token is up to the caller.
 
+With a token set, redirects to another host or from https to http are not
+followed, and the redirect is reported as `vault.ErrResponse`. A client
+passed to `WithHTTPClient` with its own `CheckRedirect` keeps that policy.
+
 ## Cancellation
 
 Requests use the context passed to `settings.Load`. Canceling it stops the
