@@ -1,0 +1,65 @@
+# Local Postgres, MySQL, and MariaDB servers for the database driver's
+# integration tests.
+#
+#   docker compose -f stash/drivers/database/docker-compose.yml up -d --wait
+#   STASH_POSTGRES_URL='postgres://stashtest:stashtest@localhost:55436/stashtest?sslmode=disable' \
+#   STASH_MYSQL_URL=mysql://stashtest:stashtest@localhost:53316/stashtest \
+#     make -C stash/drivers/database tests
+#   STASH_MYSQL_URL=mariadb://stashtest:stashtest@localhost:53317/stashtest make -C stash/drivers/database tests
+#   docker compose -f stash/drivers/database/docker-compose.yml down
+#
+# The data lives in the containers and is discarded with them. The images
+# are pinned by digest (Postgres 18.7, MySQL 8.4.13, MariaDB 11.8.9).
+services:
+  postgres:
+    image: postgres@sha256:1018733457011bf88d81db98cf43aac6d5150afc18787dbe204771fedf80ff95
+    environment:
+      POSTGRES_USER: stashtest
+      POSTGRES_PASSWORD: stashtest
+      POSTGRES_DB: stashtest
+    ports:
+      - "55436:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "stashtest", "-d", "stashtest"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+    restart: unless-stopped
+    mem_limit: 512m
+    cpus: 1.0
+
+  mysql:
+    image: mysql@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+    environment:
+      MYSQL_ROOT_PASSWORD: stashtest-root
+      MYSQL_DATABASE: stashtest
+      MYSQL_USER: stashtest
+      MYSQL_PASSWORD: stashtest
+    ports:
+      - "53316:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ustashtest", "-pstashtest"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
+
+  mariadb:
+    image: mariadb@sha256:d36f18d65a0459510b8b0f643b226a6d299e3206486e2b64ff20754a6d291707
+    environment:
+      MARIADB_ROOT_PASSWORD: stashtest-root
+      MARIADB_DATABASE: stashtest
+      MARIADB_USER: stashtest
+      MARIADB_PASSWORD: stashtest
+    ports:
+      - "53317:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    mem_limit: 1g
+    cpus: 1.0
