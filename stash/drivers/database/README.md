@@ -57,6 +57,8 @@ keys.
 
 - Expiry times come from the application's clock. Keep the clocks of every
   instance that shares a table in sync.
+- Expiry has millisecond precision. A TTL under a millisecond counts as one
+  millisecond.
 - Expired rows are never returned. Every hundredth write deletes them.
 - `Set` with `IfNotExists` is one `INSERT` statement, so exactly one of
   several racing callers stores its value.

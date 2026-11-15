@@ -11,6 +11,7 @@
 // the database open.
 //
 // Expiry times are computed from the application's clock, in milliseconds.
+// A TTL under a millisecond counts as one millisecond.
 // Expired rows are never returned, and every hundredth write deletes them.
 //
 // Set with IfNotExists is one statement. Incr runs in a transaction that
