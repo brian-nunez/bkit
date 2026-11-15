@@ -24,3 +24,13 @@ package-lock.json
 .DS_Store
 .idea/
 .vscode/
+Thumbs.db
+*.swp
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
