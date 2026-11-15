@@ -103,8 +103,12 @@ func blockCommentEnd(query string, i int) int {
 }
 
 // dollarQuoteEnd returns the index just past the dollar-quoted string at i,
-// or i+1 when the $ does not open one, as in a $1 parameter.
+// or i+1 when the $ does not open one, as in a $1 parameter or an
+// identifier such as a$b, since an identifier may contain $.
 func dollarQuoteEnd(query string, i int) int {
+	if i > 0 && (isIdentByte(query[i-1]) || query[i-1] == '$') {
+		return i + 1
+	}
 	j := i + 1
 	for j < len(query) && isIdentByte(query[j]) && (j > i+1 || !isDigit(query[j])) {
 		j++
