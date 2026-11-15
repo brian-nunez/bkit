@@ -24,12 +24,10 @@ const abortTimeout = 30 * time.Second
 // upload sends r as one PutObject request when it fits in a part, and as a
 // multipart upload otherwise. It returns the ETag and the bytes sent.
 func (b *Bucket) upload(ctx context.Context, key string, r io.Reader, o objex.PutOptions) (string, int64, error) {
-	partSize := b.client.partSize
-	first := make([]byte, partSize)
-	n, err := io.ReadFull(r, first)
+	first, err := readPart(r, b.client.partSize, o.Size)
 	switch {
 	case errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF):
-		return b.putSingle(ctx, key, first[:n], o)
+		return b.putSingle(ctx, key, first, o)
 	case err != nil:
 		return "", 0, err
 	}
@@ -44,6 +42,39 @@ func (b *Bucket) upload(ctx context.Context, key string, r io.Reader, o objex.Pu
 		return "", 0, err
 	}
 	return b.putMultipart(ctx, key, io.MultiReader(bytes.NewReader(first), bytes.NewReader(probe[:m]), r), o)
+}
+
+// initialPartBuffer is the first buffer capacity readPart uses when the body
+// size is unknown.
+const initialPartBuffer = 32 << 10
+
+// readPart reads up to limit bytes from r, like io.ReadFull into a
+// limit-sized buffer. Its buffer starts with room for sizeHint bytes and
+// io.EOF when sizeHint is not negative, and at initialPartBuffer otherwise,
+// then doubles as data arrives, never past limit, so a small body does not
+// allocate a whole part. It returns a nil error once limit bytes are read,
+// and the reader's error, io.EOF included, when r ends or fails first.
+func readPart(r io.Reader, limit, sizeHint int64) ([]byte, error) {
+	capacity := min(int64(initialPartBuffer), limit)
+	if sizeHint >= 0 {
+		capacity = min(sizeHint, limit-1) + 1
+	}
+	buf := make([]byte, 0, capacity)
+	for {
+		if len(buf) == cap(buf) {
+			grown := make([]byte, len(buf), min(2*int64(cap(buf)), limit))
+			copy(grown, buf)
+			buf = grown
+		}
+		n, err := r.Read(buf[len(buf):cap(buf)])
+		buf = buf[:len(buf)+n]
+		if int64(len(buf)) == limit {
+			return buf, nil
+		}
+		if err != nil {
+			return buf, err
+		}
+	}
 }
 
 func (b *Bucket) putSingle(ctx context.Context, key string, data []byte, o objex.PutOptions) (string, int64, error) {

@@ -361,6 +361,37 @@ func TestPutReadError(t *testing.T) {
 	}
 }
 
+func TestReadPartSizesItsBuffer(t *testing.T) {
+	const limit = minPartSize
+	cases := []struct {
+		name     string
+		body     int
+		hint     int64
+		wantErr  error
+		wantCap  int
+		checkCap bool
+	}{
+		{name: "small unknown size", body: 10, hint: -1, wantErr: io.EOF, wantCap: initialPartBuffer, checkCap: true},
+		{name: "small declared size", body: 10, hint: 10, wantErr: io.EOF, wantCap: 11, checkCap: true},
+		{name: "empty declared size", body: 0, hint: 0, wantErr: io.EOF, wantCap: 1, checkCap: true},
+		{name: "huge declared size", body: limit, hint: math.MaxInt64, wantCap: limit, checkCap: true},
+		{name: "grows to the limit", body: limit + 1, hint: -1, wantCap: limit, checkCap: true},
+		{name: "grows past the hint", body: 3 * initialPartBuffer, hint: 1, wantErr: io.EOF},
+	}
+	for _, c := range cases {
+		buf, err := readPart(&sizedReader{n: c.body}, limit, c.hint)
+		if !errors.Is(err, c.wantErr) || (c.wantErr == nil && err != nil) {
+			t.Errorf("%s: err = %v, want %v", c.name, err, c.wantErr)
+		}
+		if want := min(c.body, limit); len(buf) != want {
+			t.Errorf("%s: read %d bytes, want %d", c.name, len(buf), want)
+		}
+		if c.checkCap && cap(buf) != c.wantCap {
+			t.Errorf("%s: buffer capacity = %d, want %d", c.name, cap(buf), c.wantCap)
+		}
+	}
+}
+
 var errRead = errors.New("read failed")
 
 type errReader struct{}
