@@ -278,7 +278,10 @@ func (b *Bucket) Copy(ctx context.Context, dst, src string, opts ...objex.CopyOp
 	if o.ReplaceMetadata {
 		info.Metadata = o.Metadata
 	}
-	replace := o.ContentType != "" || o.ReplaceMetadata
+	// S3 rejects copying an object onto itself unless something is
+	// replaced, so a self-copy restates the current content type and
+	// metadata, matching what the other drivers keep.
+	replace := o.ContentType != "" || o.ReplaceMetadata || dst == src
 
 	var etag string
 	var modified time.Time
