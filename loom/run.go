@@ -44,8 +44,9 @@ func (g *Graph) Run(ctx context.Context, opts ...RunOption) (*Result, error) {
 	g.frozen = true
 	nodes := slices.Clone(g.nodes)
 	gcfg := g.cfg
-	errs := slices.Concat(gcfg.problems, g.errs, cfg.problems)
+	parents, errs := g.resolve()
 	g.mu.Unlock()
+	errs = append(errs, cfg.problems...)
 
 	pool := cmp.Or(cfg.pool, gcfg.pool)
 	if pool != nil {
@@ -77,6 +78,7 @@ func (g *Graph) Run(ctx context.Context, opts ...RunOption) (*Result, error) {
 		ctx:      runCtx,
 		cancel:   cancel,
 		res:      res,
+		parents:  parents,
 		children: map[*node][]*node{},
 		waiting:  map[*node]int{},
 		results:  make(chan attemptResult),
@@ -110,6 +112,7 @@ type run struct {
 	cancel   context.CancelCauseFunc
 	res      *Result
 
+	parents  map[*node][]*node
 	children map[*node][]*node
 	waiting  map[*node]int
 	inflight int
@@ -152,7 +155,7 @@ func (r *run) execute(prev *Result) (*Result, error) {
 			o.state, o.value = p.state, p.value
 		}
 		r.res.outcomes[n] = o
-		for _, p := range n.parents {
+		for _, p := range r.parents[n] {
 			r.children[p] = append(r.children[p], n)
 		}
 	}
@@ -161,7 +164,7 @@ func (r *run) execute(prev *Result) (*Result, error) {
 		if r.res.outcomes[n].state.final() {
 			continue
 		}
-		for _, p := range n.parents {
+		for _, p := range r.parents[n] {
 			if !r.res.outcomes[p].state.final() {
 				r.waiting[n]++
 			}
@@ -210,10 +213,10 @@ func (r *run) ready(n *node) {
 		r.cancelTask(n, 0, &Error{Task: n.name, Err: context.Cause(r.ctx)})
 		return
 	}
-	if len(n.parents) > 0 {
-		states := make([]State, len(n.parents))
+	if parents := r.parents[n]; len(parents) > 0 {
+		states := make([]State, len(parents))
 		upstreamFailed := false
-		for i, p := range n.parents {
+		for i, p := range parents {
 			states[i] = r.res.outcomes[p].state
 			upstreamFailed = upstreamFailed || states[i].failed()
 		}
@@ -242,7 +245,7 @@ func (r *run) ready(n *node) {
 func (r *run) submit(n *node, attempt int) {
 	s := r.defaults.over(n.settings)
 	in := &Inputs{values: map[*node]any{}}
-	for _, p := range n.parents {
+	for _, p := range r.parents[n] {
 		if o := r.res.outcomes[p]; o.state == Succeeded {
 			in.values[p] = o.value
 		}
