@@ -56,7 +56,7 @@ users = loom.Add(g, "users", fetchUsers)
 ```
 
 `Run` and `Validate` check for cycles with Kahn's algorithm and report one
-as `ErrInvalidGraph`, such as `cycle: a -> b -> c -> a`. `loom.AllowCycles()`
+as `ErrCycle`, such as `cycle: a -> b -> c -> a`. `loom.AllowCycles()`
 turns the check off. A task in a cycle then waits for a parent that waits
 for it, so it stays `Pending` with everything downstream of it, and the run
 returns once everything else is done.
@@ -251,6 +251,7 @@ if errors.Is(err, loom.ErrTimeout) {
 | Sentinel | Meaning |
 | --- | --- |
 | `ErrInvalidGraph` | A nil graph or function, an empty or duplicate name, a foreign or unknown parent, a cycle, or an `Add` after `Run` |
+| `ErrCycle` | Tasks that depend on each other in a loop. Also matches `ErrInvalidGraph` |
 | `ErrInvalidOption` | An out-of-range option, a nil option or context, a foreign `Resume` result, or a pool not made by `NewPool` |
 | `ErrSkip` | Returned by a task to mark it `Skipped` |
 | `ErrUpstream` | Kind of a task whose trigger rule saw a failed parent |

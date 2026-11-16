@@ -163,7 +163,8 @@ func AfterName(names ...string) TaskOption {
 	return taskOptionFunc(func(c *taskConfig) { c.afterNames = append(c.afterNames, names...) })
 }
 
-// AllowCycles turns off the cycle check that Run and Validate perform. A
+// AllowCycles turns off the cycle check, so Run and Validate no longer
+// report ErrCycle. A
 // task in a cycle waits for a parent that waits for it, so it never becomes
 // ready: it stays Pending, along with every task downstream of it, and the
 // run returns once everything else is done.

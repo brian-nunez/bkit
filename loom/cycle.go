@@ -8,8 +8,8 @@ import (
 
 // resolve returns every task's parents, from handles and names, with every
 // mistake that stops the graph from running: option and build mistakes,
-// unknown parent names, and, unless the graph allows cycles, a cycle. The
-// caller holds g.mu.
+// unknown parent names, and, unless the graph allows cycles, an ErrCycle.
+// The caller holds g.mu.
 func (g *Graph) resolve() (map[*node][]*node, []error) {
 	errs := slices.Concat(g.cfg.problems, g.errs)
 	byName := make(map[string]*node, len(g.nodes))
@@ -34,7 +34,7 @@ func (g *Graph) resolve() (map[*node][]*node, []error) {
 	}
 	if !g.cfg.allowCycles {
 		if cycle := findCycle(g.nodes, parents); cycle != nil {
-			errs = append(errs, fmt.Errorf("%w: cycle: %s", ErrInvalidGraph, strings.Join(cycle, " -> ")))
+			errs = append(errs, fmt.Errorf("%w: %s", ErrCycle, strings.Join(cycle, " -> ")))
 		}
 	}
 	return parents, errs

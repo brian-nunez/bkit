@@ -2,6 +2,7 @@ package loom
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -11,10 +12,16 @@ import (
 var (
 	// ErrInvalidGraph reports a graph that cannot run: a nil graph, a task
 	// with an empty or duplicate name or a nil function, a parent from
-	// another graph, a parent name that matches no task, a cycle, or a task
-	// added after the first Run. Fix the graph where it is built, or pass
-	// AllowCycles to run a graph with cycles.
+	// another graph, a parent name that matches no task, a cycle (see
+	// ErrCycle), or a task added after the first Run. Fix the graph where it
+	// is built.
 	ErrInvalidGraph = errors.New("loom: invalid graph")
+
+	// ErrCycle reports a graph whose tasks depend on each other in a loop.
+	// The message names one cycle, such as "a -> b -> c -> a". It also
+	// matches ErrInvalidGraph. Remove an edge from the cycle, or pass
+	// AllowCycles to run the graph anyway.
+	ErrCycle = fmt.Errorf("%w: cycle", ErrInvalidGraph)
 
 	// ErrInvalidOption reports an option value that is out of range, a nil
 	// option or context, a Resume result from another graph, or a Pool

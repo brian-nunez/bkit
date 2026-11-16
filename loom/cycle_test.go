@@ -32,10 +32,10 @@ func Example_cycle() {
 	loom.Add(g, "c", value(3), loom.AfterName("b"))
 
 	_, err := g.Run(context.Background())
-	fmt.Println(errors.Is(err, loom.ErrInvalidGraph))
+	fmt.Println(errors.Is(err, loom.ErrCycle), errors.Is(err, loom.ErrInvalidGraph))
 	fmt.Println(err)
 	// Output:
-	// true
+	// true true
 	// loom: invalid graph: cycle: a -> b -> c -> a
 }
 
@@ -90,8 +90,9 @@ func TestCycles(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			g := loom.New()
 			c.build(g)
-			wantErr(t, g.Validate(), loom.ErrInvalidGraph, c.want)
+			wantErr(t, g.Validate(), loom.ErrCycle, c.want)
 			res, err := g.Run(context.Background())
+			wantErr(t, err, loom.ErrCycle, c.want)
 			wantErr(t, err, loom.ErrInvalidGraph, c.want)
 			if strings.Count(err.Error(), "cycle:") != 1 {
 				t.Errorf("want one cycle reported: %v", err)
@@ -107,7 +108,11 @@ func TestAfterName(t *testing.T) {
 	g := loom.New()
 	loom.Add(g, "a", value(1))
 	loom.Add(g, "typo", value(2), loom.AfterName("aa"))
-	wantErr(t, g.Validate(), loom.ErrInvalidGraph, `task "typo": unknown parent "aa"`)
+	err := g.Validate()
+	wantErr(t, err, loom.ErrInvalidGraph, `task "typo": unknown parent "aa"`)
+	if errors.Is(err, loom.ErrCycle) {
+		t.Errorf("an unknown parent matches ErrCycle: %v", err)
+	}
 
 	// The same parent by handle and by name counts once.
 	ok := loom.New()
@@ -127,7 +132,7 @@ func TestAfterName(t *testing.T) {
 	loom.Add(dup, "child", func(ctx context.Context, in *loom.Inputs) (int, error) {
 		return loom.Get(in, first), nil
 	}, loom.AfterName("x"))
-	if err := dup.Validate(); !errors.Is(err, loom.ErrInvalidGraph) || strings.Contains(err.Error(), "unknown parent") {
+	if err := dup.Validate(); !errors.Is(err, loom.ErrInvalidGraph) || errors.Is(err, loom.ErrCycle) || strings.Contains(err.Error(), "unknown parent") {
 		t.Fatalf("Validate = %v", err)
 	}
 }
