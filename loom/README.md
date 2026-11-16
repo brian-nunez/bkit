@@ -39,10 +39,27 @@ fmt.Println(loom.Get(res, report)) // a Report
 ```
 
 Every task has the same shape, `func(ctx context.Context, in *loom.Inputs)
-(T, error)`. Tasks without parents ignore `in`. A task can only depend on
-tasks added before it, so a graph never has a cycle. Graph mistakes, such as
-a duplicate name or a parent from another graph, fail `Validate` and `Run`
+(T, error)`. Tasks without parents ignore `in`. Graph mistakes, such as a
+duplicate name or a parent from another graph, fail `Validate` and `Run`
 before any task starts.
+
+`AfterName` declares parents by name, so a task can depend on a task added
+after it. Names resolve when the graph runs, and a name that matches no task
+fails the run. Read a named parent's value with its handle:
+
+```go
+var users *loom.Task[[]User]
+count := loom.Add(g, "count", func(ctx context.Context, in *loom.Inputs) (int, error) {
+	return len(loom.Get(in, users)), nil
+}, loom.AfterName("users"))
+users = loom.Add(g, "users", fetchUsers)
+```
+
+`Run` and `Validate` check for cycles with Kahn's algorithm and report one
+as `ErrInvalidGraph`, such as `cycle: a -> b -> c -> a`. `loom.AllowCycles()`
+turns the check off. A task in a cycle then waits for a parent that waits
+for it, so it stays `Pending` with everything downstream of it, and the run
+returns once everything else is done.
 
 `Run` returns a `*loom.Result` even when it fails, so every task's state is
 available:
@@ -127,10 +144,12 @@ if err != nil {
 | Option | On | Effect | Default |
 | --- | --- | --- | --- |
 | `After(tasks...)` | `Add` | The task's parents | No parents |
+| `AfterName(names...)` | `Add` | The task's parents, by name | No parents |
 | `WithRetry(policy)` | `New`, `Add` | Retry policy | No retries |
 | `WithTimeout(d)` | `New`, `Add` | Limit for each attempt | No limit |
 | `WithTrigger(t)` | `New`, `Add` | Trigger rule | `AllSuccess` |
 | `WithName(name)` | `New` | Name carried by every event | Empty |
+| `AllowCycles()` | `New` | Skip the cycle check | Cycles fail the run |
 | `WithPool(p)` | `New`, `Run` | Pool that runs the tasks | A private pool per run |
 | `FailFast()` | `New`, `Run` | Stop at the first failure | Off |
 | `WithHooks(h)` | `New`, `Run`, `NewPool` | Event callbacks | None |
@@ -231,7 +250,7 @@ if errors.Is(err, loom.ErrTimeout) {
 
 | Sentinel | Meaning |
 | --- | --- |
-| `ErrInvalidGraph` | A nil graph or function, an empty or duplicate name, a foreign parent, or an `Add` after `Run` |
+| `ErrInvalidGraph` | A nil graph or function, an empty or duplicate name, a foreign or unknown parent, a cycle, or an `Add` after `Run` |
 | `ErrInvalidOption` | An out-of-range option, a nil option or context, a foreign `Resume` result, or a pool not made by `NewPool` |
 | `ErrSkip` | Returned by a task to mark it `Skipped` |
 | `ErrUpstream` | Kind of a task whose trigger rule saw a failed parent |

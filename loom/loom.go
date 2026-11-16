@@ -29,7 +29,8 @@ type node struct {
 	name     string
 	index    int
 	run      func(ctx context.Context, in *Inputs) (any, error)
-	parents  []*node
+	parents  []*node  // declared with After
+	names    []string // declared with AfterName, resolved when the graph runs
 	settings settings
 }
 
@@ -82,8 +83,8 @@ func New(opts ...GraphOption) *Graph {
 
 // Add puts a task named name in g and returns its handle. Mistakes (a nil
 // graph or function, an empty or duplicate name, a parent from another
-// graph, an invalid option, or an Add after the first Run) are reported by
-// Validate and Run, before any task runs.
+// graph, an unknown parent name, a cycle, an invalid option, or an Add after
+// the first Run) are reported by Validate and Run, before any task runs.
 func Add[T any](g *Graph, name string, fn Func[T], opts ...TaskOption) *Task[T] {
 	var cfg taskConfig
 	for _, o := range opts {
@@ -93,7 +94,7 @@ func Add[T any](g *Graph, name string, fn Func[T], opts ...TaskOption) *Task[T] 
 		}
 		o.applyTask(&cfg)
 	}
-	n := &node{graph: g, name: name, settings: cfg.settings}
+	n := &node{graph: g, name: name, names: cfg.afterNames, settings: cfg.settings}
 	if fn != nil {
 		n.run = func(ctx context.Context, in *Inputs) (any, error) { return fn(ctx, in) }
 	}
@@ -104,9 +105,8 @@ func Add[T any](g *Graph, name string, fn Func[T], opts ...TaskOption) *Task[T] 
 
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	label := "task " + strconv.Quote(name)
 	bad := func(format string, args ...any) {
-		g.errs.add(fmt.Errorf("%w: %s: "+format, append([]any{ErrInvalidGraph, label}, args...)...))
+		g.errs.add(taskError(name, format, args...))
 	}
 	if g.frozen {
 		bad("added after Run")
@@ -122,7 +122,7 @@ func Add[T any](g *Graph, name string, fn Func[T], opts ...TaskOption) *Task[T] 
 		bad("nil function")
 	}
 	for _, err := range cfg.problems {
-		g.errs.add(fmt.Errorf("%s: %w", label, err))
+		g.errs.add(fmt.Errorf("task %s: %w", strconv.Quote(name), err))
 	}
 	seen := map[*node]bool{}
 	for _, ref := range cfg.after {
@@ -149,15 +149,20 @@ func Add[T any](g *Graph, name string, fn Func[T], opts ...TaskOption) *Task[T] 
 	return t
 }
 
-// Validate reports every mistake in g, joined, without running anything.
-// Graph mistakes match ErrInvalidGraph and option mistakes match
-// ErrInvalidOption. A graph cannot contain a cycle: a task can only depend
-// on tasks added before it.
+// Validate reports every mistake Run would refuse, joined, without running
+// anything. Graph mistakes, including a cycle, match ErrInvalidGraph, and
+// option mistakes match ErrInvalidOption.
 func (g *Graph) Validate() error {
 	if g == nil {
 		return fmt.Errorf("%w: nil graph", ErrInvalidGraph)
 	}
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	return errors.Join(append(append([]error{}, g.cfg.problems...), g.errs...)...)
+	_, errs := g.resolve()
+	return errors.Join(errs...)
+}
+
+// taskError reports a mistake in the task named name.
+func taskError(name, format string, args ...any) error {
+	return fmt.Errorf("%w: task %s: "+format, append([]any{ErrInvalidGraph, strconv.Quote(name)}, args...)...)
 }

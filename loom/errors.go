@@ -11,8 +11,9 @@ import (
 var (
 	// ErrInvalidGraph reports a graph that cannot run: a nil graph, a task
 	// with an empty or duplicate name or a nil function, a parent from
-	// another graph, or a task added after the first Run. Fix the graph
-	// where it is built.
+	// another graph, a parent name that matches no task, a cycle, or a task
+	// added after the first Run. Fix the graph where it is built, or pass
+	// AllowCycles to run a graph with cycles.
 	ErrInvalidGraph = errors.New("loom: invalid graph")
 
 	// ErrInvalidOption reports an option value that is out of range, a nil

@@ -68,17 +68,19 @@ func (s settings) over(t settings) settings {
 
 type graphConfig struct {
 	problems
-	name     string
-	pool     *Pool
-	hooks    []Hooks
-	failFast bool
-	defaults settings
+	allowCycles bool
+	name        string
+	pool        *Pool
+	hooks       []Hooks
+	failFast    bool
+	defaults    settings
 }
 
 type taskConfig struct {
 	problems
-	after    []Ref
-	settings settings
+	after      []Ref
+	afterNames []string
+	settings   settings
 }
 
 type runConfig struct {
@@ -151,6 +153,22 @@ func (f shrinkOptionFunc) applyShrink(c *shrinkConfig) { f(c) }
 // same graph.
 func After(parents ...Ref) TaskOption {
 	return taskOptionFunc(func(c *taskConfig) { c.after = append(c.after, parents...) })
+}
+
+// AfterName declares the task's parents by name. Names are resolved when
+// the graph runs, so they can name tasks added later. A name that matches
+// no task is ErrInvalidGraph. Read a named parent's value with its handle,
+// as with After.
+func AfterName(names ...string) TaskOption {
+	return taskOptionFunc(func(c *taskConfig) { c.afterNames = append(c.afterNames, names...) })
+}
+
+// AllowCycles turns off the cycle check that Run and Validate perform. A
+// task in a cycle waits for a parent that waits for it, so it never becomes
+// ready: it stays Pending, along with every task downstream of it, and the
+// run returns once everything else is done.
+func AllowCycles() GraphOption {
+	return graphOptionFunc(func(c *graphConfig) { c.allowCycles = true })
 }
 
 // WithRetry sets the retry policy. On New it is the default for every task,
