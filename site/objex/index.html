@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A backend-independent API for object storage.">
+<title>objex | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html" aria-current="page">objex</a>
+<a href="../gate/index.html">gate</a>
+<a href="../loom/index.html">loom</a>
+<a href="../settings/index.html">settings</a>
+<a href="../rdb/index.html">rdb</a>
+<a href="../stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / objex</p>
+<h1>objex</h1>
+<p class="lead">A backend-independent API for object storage.</p>
+<p>
+<code>objex</code> defines the <code>Bucket</code> interface, optional capability interfaces, call options, key validation rules, and sentinel errors. Drivers live in their own modules, so an application installs only the driver it uses. Application code that depends on <code>objex.Bucket</code> switches backends by changing the one place the driver is constructed.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/objex">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/objex">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install objex / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install objex" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install objex"><code>go get github.com/brian-nunez/bkit/objex</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import objex / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import objex" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import objex"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/objex"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#drivers">Drivers</a>
+<a href="#usage">Usage</a>
+<a href="#capabilities-and-keys">Capabilities and keys</a>
+<a href="#errors">Errors</a>
+<a href="#driver-setup">Driver setup</a>
+</nav>
+<div class="article-content">
+<section id="drivers" aria-labelledby="drivers-title">
+<h2 id="drivers-title">Drivers</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Reference table">
+<table>
+<thead>
+<tr>
+<th scope="col">Driver</th>
+<th scope="col">Install Command</th>
+<th scope="col">Backend</th>
+<th scope="col">Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="#driver-s3">s3</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/objex/drivers/s3</code>
+</td>
+<td>Amazon S3 and S3 services such as MinIO and Cloudflare R2.</td>
+<td>
+<code>Bucket</code>, <code>Manager</code>, <code>Presigner</code>, <code>Pinger</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-filesystem">filesystem</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/objex/drivers/filesystem</code>
+</td>
+<td>A directory on local disk, resolved safely through <code>os.Root</code>.</td>
+<td>
+<code>Bucket</code>, <code>Manager</code>, <code>Mover</code>, <code>Pinger</code>, <code>Presigner</code> (with <code>WithPresign</code>)</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-memory">memory</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/objex/drivers/memory</code>
+</td>
+<td>Process memory, for tests and short-lived processes.</td>
+<td>
+<code>Bucket</code>, <code>Manager</code>, <code>Mover</code>, <code>Pinger</code>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Usage</h2>
+<h3>Writing and reading objects</h3>
+<p>Construct the driver in one place and pass <code>objex.Bucket</code> everywhere else.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Write and read objects / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Write and read objects" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Write and read objects"><code><span class="tok-kw">func</span> newStorage(ctx context.Context) (objex.Bucket, error) {
+	client, err := s3.New(ctx, s3.WithRegion(<span class="tok-str">"us-east-1"</span>))
+	<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+		<span class="tok-kw">return</span> <span class="tok-kw">nil</span>, err
+	}
+	<span class="tok-kw">return</span> client.Bucket(<span class="tok-str">"assets"</span>), <span class="tok-kw">nil</span>
+}
+
+<span class="tok-kw">func</span> saveAvatar(ctx context.Context, b objex.Bucket, userID <span class="tok-kw">string</span>, r io.Reader) error {
+	_, err := b.Put(ctx, <span class="tok-str">"avatars/"</span>+userID+<span class="tok-str">".png"</span>, r, objex.WithContentType(<span class="tok-str">"image/png"</span>))
+	<span class="tok-kw">return</span> err
+}</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Read an object range / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Read an object range" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Read an object range"><code>obj, err := b.Get(ctx, <span class="tok-str">"avatars/42.png"</span>)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> obj.Close()
+
+head, err := b.Get(ctx, <span class="tok-str">"videos/intro.mp4"</span>, objex.WithRange(0, 1&lt;&lt;20))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> head.Close()</code></pre></div>
+<h3>Listing</h3>
+<p>
+<code>List</code> returns an iterator and fetches further pages as you range over it. <code>WithDelimiter("/")</code> groups keys into directory-like entries with <code>IsPrefix</code> set. <code>WithStartAfter</code> resumes after a key.</p>
+<div class="codebox">
+<div class="codebar">
+<span>List objects / go</span>
+<button class="copy-btn" type="button" aria-label="Copy List objects" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="List objects"><code><span class="tok-kw">for</span> info, err := <span class="tok-kw">range</span> b.List(ctx, objex.WithPrefix(<span class="tok-str">"avatars/"</span>)) {
+	<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+		<span class="tok-kw">return</span> err
+	}
+	fmt.Println(info.Key, info.Size, info.LastModified)
+}</code></pre></div>
+<h3>Conditional writes, copy, and move</h3>
+<p>Use <code>IfNotExists</code> to create only, or <code>IfMatch</code> with an ETag to replace only the version you read. <code>objex.Move</code> uses the driver's native move when available and falls back to copy-then-delete.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Conditional writes and copy / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Conditional writes and copy" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Conditional writes and copy"><code>_, err := b.Put(ctx, <span class="tok-str">"locks/job-7"</span>, r, objex.IfNotExists())
+
+info, _ := b.Stat(ctx, <span class="tok-str">"config.json"</span>)
+_, err = b.Put(ctx, <span class="tok-str">"config.json"</span>, r, objex.IfMatch(info.ETag))
+<span class="tok-kw">if</span> errors.Is(err, objex.ErrPreconditionFailed) {
+	<span class="tok-cmt">// Another writer changed the object first.</span>
+}
+
+info, err = b.Copy(ctx, <span class="tok-str">"archive/report.pdf"</span>, <span class="tok-str">"inbox/report.pdf"</span>)
+info, err = objex.Move(ctx, b, <span class="tok-str">"done/report.pdf"</span>, <span class="tok-str">"inbox/report.pdf"</span>)
+ok, err := objex.Exists(ctx, b, <span class="tok-str">"done/report.pdf"</span>)</code></pre></div>
+</section>
+<section id="capabilities-and-keys" aria-labelledby="capabilities-and-keys-title">
+<h2 id="capabilities-and-keys-title">Capabilities and keys</h2>
+<p>Drivers implement optional interfaces when their backend supports them. Check with a type assertion on <code>objex.Bucket</code>: <code>objex.Presigner</code> for time-limited <code>GET</code> and <code>PUT</code> URLs, <code>objex.Mover</code> for native atomic moves, <code>objex.Pinger</code> to verify reachability, and <code>objex.Manager</code> on driver clients for bucket creation, deletion, and listing.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Presign object requests / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Presign object requests" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Presign object requests"><code><span class="tok-kw">if</span> p, ok := b.(objex.Presigner); ok {
+	req, err := p.PresignGet(ctx, <span class="tok-str">"avatars/42.png"</span>, 15*time.Minute)
+}</code></pre></div>
+<h3>Key and bucket rules</h3>
+<p>Every driver validates keys with <code>objex.ValidateKey</code>: valid UTF-8, 1 to 1024 bytes, <code>/</code>-separated segments that are non-empty and never <code>.</code> or <code>..</code>, with no backslashes or control characters. Bucket names follow <code>objex.ValidateBucketName</code>: 3 to 63 lowercase letters, digits, hyphens, and dots.</p>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Errors</h2>
+<p>Failures are <code>*objex.Error</code> values carrying <code>Op</code>, <code>Bucket</code>, <code>Key</code>, a sentinel, and the underlying error. Match sentinels with <code>errors.Is</code>: <code>ErrNotFound</code>, <code>ErrBucketNotFound</code>, <code>ErrBucketExists</code>, <code>ErrBucketNotEmpty</code>, <code>ErrPermission</code>, <code>ErrPreconditionFailed</code>, <code>ErrInvalidKey</code>, <code>ErrInvalidBucketName</code>, <code>ErrInvalidRange</code>, <code>ErrInvalidOption</code>, and <code>ErrUnsupported</code>.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Error sentinels">
+<table>
+<thead>
+<tr>
+<th scope="col">Sentinel</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ErrNotFound</code>
+</td>
+<td>The object does not exist</td>
+</tr>
+<tr>
+<td>
+<code>ErrBucketNotFound</code>
+</td>
+<td>The bucket does not exist</td>
+</tr>
+<tr>
+<td>
+<code>ErrBucketExists</code>
+</td>
+<td>A bucket being created already exists</td>
+</tr>
+<tr>
+<td>
+<code>ErrBucketNotEmpty</code>
+</td>
+<td>A bucket being deleted still holds objects</td>
+</tr>
+<tr>
+<td>
+<code>ErrPermission</code>
+</td>
+<td>The credentials do not allow the operation</td>
+</tr>
+<tr>
+<td>
+<code>ErrPreconditionFailed</code>
+</td>
+<td>
+<code>IfMatch</code> or <code>IfNotExists</code> did not hold</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidKey</code>
+</td>
+<td>The key fails <code>ValidateKey</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidBucketName</code>
+</td>
+<td>The name fails <code>ValidateBucketName</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidRange</code>
+</td>
+<td>The range is malformed or starts past the end</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidOption</code>
+</td>
+<td>An option is malformed or conflicts with another</td>
+</tr>
+<tr>
+<td>
+<code>ErrUnsupported</code>
+</td>
+<td>The driver cannot provide the operation or option</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="codebox">
+<div class="codebar">
+<span>Inspect an object error / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Inspect an object error" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Inspect an object error"><code><span class="tok-kw">var</span> objexErr *objex.Error
+<span class="tok-kw">if</span> errors.As(err, &amp;objexErr) {
+	log.Printf(<span class="tok-str">"%s %s/%s failed: %v"</span>, objexErr.Op, objexErr.Bucket, objexErr.Key, objexErr.Err)
+}</code></pre></div>
+</section>
+<section id="driver-setup" aria-labelledby="driver-setup-title">
+<h2 id="driver-setup-title">Driver setup</h2>
+<article class="driver-detail" id="driver-s3">
+<h3>s3</h3>
+<p>Supports Amazon S3, MinIO, and Cloudflare R2. Small bodies upload in a single PutObject, and larger streams use multipart upload. Every operation on a missing bucket returns <code>objex.ErrBucketNotFound</code>.</p>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/objex/drivers/s3">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/objex/drivers/s3">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install objex s3 / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install objex s3" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install objex s3"><code>go get github.com/brian-nunez/bkit/objex/drivers/s3</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>s3 setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy s3 setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="s3 setup"><code>client, err := s3.New(ctx,
+	s3.WithRegion(<span class="tok-str">"us-east-1"</span>),
+	s3.WithEndpoint(<span class="tok-str">"https://objects.example.com"</span>),
+	s3.WithPathStyle(),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">var</span> b objex.Bucket = client.Bucket(<span class="tok-str">"assets"</span>)</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-filesystem">
+<h3>filesystem</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/objex/drivers/filesystem">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/objex/drivers/filesystem">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install objex filesystem / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install objex filesystem" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install objex filesystem"><code>go get github.com/brian-nunez/bkit/objex/drivers/filesystem</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>filesystem setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy filesystem setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="filesystem setup"><code>client, err := filesystem.New(<span class="tok-str">"/var/lib/app/storage"</span>,
+	filesystem.WithPresign(<span class="tok-str">"https://example.com/files"</span>, signingKey),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> client.Close()
+
+<span class="tok-kw">if</span> err := client.CreateBucket(ctx, <span class="tok-str">"assets"</span>); err != <span class="tok-kw">nil</span> &amp;&amp; !errors.Is(err, objex.ErrBucketExists) {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">var</span> b objex.Bucket = client.Bucket(<span class="tok-str">"assets"</span>)</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-memory">
+<h3>memory</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/objex/drivers/memory">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/objex/drivers/memory">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install objex memory / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install objex memory" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install objex memory"><code>go get github.com/brian-nunez/bkit/objex/drivers/memory</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>memory setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy memory setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="memory setup"><code>client := memory.New()
+<span class="tok-kw">if</span> err := client.CreateBucket(ctx, <span class="tok-str">"assets"</span>); err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">var</span> b objex.Bucket = client.Bucket(<span class="tok-str">"assets"</span>)
+
+_, err := b.Put(ctx, <span class="tok-str">"hello.txt"</span>, strings.NewReader(<span class="tok-str">"hi"</span>), objex.WithContentType(<span class="tok-str">"text/plain"</span>))</code></pre></div>
+</article>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../index.html">← Overview</a>
+<a href="../gate/index.html">gate →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>

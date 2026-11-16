@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="One API over key-value stores.">
+<title>stash | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html">objex</a>
+<a href="../gate/index.html">gate</a>
+<a href="../loom/index.html">loom</a>
+<a href="../settings/index.html">settings</a>
+<a href="../rdb/index.html">rdb</a>
+<a href="../stash/index.html" aria-current="page">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / stash</p>
+<h1>stash</h1>
+<p class="lead">One API over key-value stores.</p>
+<p>Keep values in process memory, in the application's SQL database, or on a Redis or Valkey server, and switch between them by changing a URL or constructor. Every driver runs the <code>stashtest</code> conformance suite, so code written against <code>*stash.Store</code> behaves the same on all of them.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/stash">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/stash">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install stash / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash"><code>go get github.com/brian-nunez/bkit/stash</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import stash / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import stash" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import stash"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/stash"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#drivers">Drivers</a>
+<a href="#usage">Usage</a>
+<a href="#errors">Errors</a>
+<a href="#driver-setup">Driver setup</a>
+</nav>
+<div class="article-content">
+<section id="drivers" aria-labelledby="drivers-title">
+<h2 id="drivers-title">Drivers</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Reference table">
+<table>
+<thead>
+<tr>
+<th scope="col">Driver</th>
+<th scope="col">Install Command</th>
+<th scope="col">Backend</th>
+<th scope="col">Opens With</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="#driver-memory">memory</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/stash/drivers/memory</code>
+</td>
+<td>Process memory with lazy expiry cleanup on writes.</td>
+<td>
+<code>memory://</code>, or <code>memory.New()</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-database">database</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/stash/drivers/database</code>
+</td>
+<td>A SQL table in SQLite, PostgreSQL, or MySQL and MariaDB via <code>*rdb.DB</code>.</td>
+<td>
+<code>database.New(ctx, db, opts...)</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-redis">redis</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/stash/drivers/redis</code>
+</td>
+<td>Redis server via <code>go-redis</code>.</td>
+<td>
+<code>redis://</code>, <code>rediss://</code>, or <code>redis.New(ctx, cfg)</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-valkey">valkey</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/stash/drivers/valkey</code>
+</td>
+<td>Valkey server via <code>valkey-go</code>.</td>
+<td>
+<code>valkey://</code>, <code>valkeys://</code>, or <code>valkey.New(ctx, cfg)</code>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Usage</h2>
+<h3>Opening a store</h3>
+<p>Pass the drivers the application supports to <code>stash.Open</code>, or pass an existing <code>*rdb.DB</code> to <code>database.New</code>.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Open a store by URL / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Open a store by URL" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Open a store by URL"><code>s, err := stash.Open(ctx, os.Getenv(<span class="tok-str">"STASH_URL"</span>),
+	memory.Driver(),
+	redis.Driver(),
+	valkey.Driver(),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> s.Close()</code></pre></div>
+<h3>Typed values, locks, and counters</h3>
+<p>
+<code>stash.Typed[T]</code> encodes Go structs with a codec such as <code>stash.JSON</code>. <code>IfNotExists()</code> and <code>Incr</code> run atomically in the store.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Typed values and locks / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Typed values and locks" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Typed values and locks"><code>sessions := stash.Typed[Session](s.Namespace(<span class="tok-str">"sessions"</span>), stash.JSON)
+err := sessions.Set(ctx, sessionID, Session{UserID: 42}, stash.WithTTL(24*time.Hour))
+sess, err := sessions.Get(ctx, sessionID)
+
+err = s.Set(ctx, <span class="tok-str">"lock:job-7"</span>, []byte(owner), stash.IfNotExists(), stash.WithTTL(30*time.Second))
+<span class="tok-kw">if</span> errors.Is(err, stash.ErrExists) {
+	<span class="tok-kw">return</span> ErrBusy
+}
+
+n, err := s.Incr(ctx, <span class="tok-str">"signups:2026-11-14"</span>, 1)</code></pre></div>
+<h3>Namespaces and expiry</h3>
+<p>
+<code>s.Namespace("cache")</code> prefixes keys with <code>cache:</code>, and <code>cache.Clear(ctx)</code> deletes only keys in that namespace (<code>Clear</code> on the root store fails with <code>ErrInvalidOption</code>). <code>s.TTL(ctx, key)</code> returns the remaining time or <code>stash.NoExpiry</code>, and <code>s.Expire(ctx, key, ttl)</code> updates or removes expiry.</p>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Errors</h2>
+<p>Match <code>*stash.Error</code> values with <code>errors.Is</code>: <code>ErrNotFound</code>, <code>ErrExists</code>, <code>ErrNotInteger</code>, <code>ErrInvalidKey</code>, <code>ErrInvalidOption</code>, <code>ErrCodec</code>, <code>ErrClosed</code>, <code>ErrUnknownDriver</code>, and <code>ErrInvalidURL</code>. Error messages never contain the store URL, a key, or a value.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Error sentinels">
+<table>
+<thead>
+<tr>
+<th scope="col">Sentinel</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ErrNotFound</code>
+</td>
+<td>The key is missing or expired</td>
+</tr>
+<tr>
+<td>
+<code>ErrExists</code>
+</td>
+<td>
+<code>IfNotExists</code> found the key already set</td>
+</tr>
+<tr>
+<td>
+<code>ErrNotInteger</code>
+</td>
+<td>
+<code>Incr</code> on a value that is not an integer, or an overflow</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidKey</code>
+</td>
+<td>An empty, non-UTF-8, or too long key or namespace</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidOption</code>
+</td>
+<td>A negative TTL, or <code>Clear</code> on the root store</td>
+</tr>
+<tr>
+<td>
+<code>ErrCodec</code>
+</td>
+<td>A typed value the codec cannot encode or decode</td>
+</tr>
+<tr>
+<td>
+<code>ErrClosed</code>
+</td>
+<td>A call after <code>Close</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>ErrUnknownDriver</code>
+</td>
+<td>No driver matches the URL's scheme</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidURL</code>
+</td>
+<td>The URL cannot be parsed or has no scheme</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="driver-setup" aria-labelledby="driver-setup-title">
+<h2 id="driver-setup-title">Driver setup</h2>
+<article class="driver-detail" id="driver-memory">
+<h3>memory</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/stash/drivers/memory">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/stash/drivers/memory">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install stash memory / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash memory" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash memory"><code>go get github.com/brian-nunez/bkit/stash/drivers/memory</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>memory setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy memory setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="memory setup"><code>s := memory.New()
+<span class="tok-kw">defer</span> s.Close()</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-database">
+<h3>database</h3>
+<p>Stores keys in a SQL table created by <code>database.New</code>, with millisecond expiry precision. A TTL under a millisecond counts as one millisecond, and every hundredth write deletes expired rows.</p>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/stash/drivers/database">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/stash/drivers/database">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install stash database / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash database" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash database"><code>go get github.com/brian-nunez/bkit/stash/drivers/database</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>database setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy database setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="database setup"><code>db, err := rdb.Open(ctx, os.Getenv(<span class="tok-str">"DATABASE_URL"</span>),
+	sqlite.Driver(),
+	postgres.Driver(),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()
+
+s, err := database.New(ctx, db,
+	database.WithTable(<span class="tok-str">"sessions"</span>),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> s.Close()</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-redis">
+<h3>redis</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/stash/drivers/redis">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/stash/drivers/redis">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install stash redis / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash redis" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash redis"><code>go get github.com/brian-nunez/bkit/stash/drivers/redis</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>redis setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy redis setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="redis setup"><code>s, err := redis.New(ctx, redis.Config{
+	Addr: <span class="tok-str">"cache.example.com:6379"</span>,
+	Password: password,
+	TLS: &amp;tls.Config{MinVersion: tls.VersionTLS12},
+})
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> s.Close()</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-valkey">
+<h3>valkey</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/stash/drivers/valkey">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/stash/drivers/valkey">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install stash valkey / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash valkey" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash valkey"><code>go get github.com/brian-nunez/bkit/stash/drivers/valkey</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>valkey setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy valkey setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="valkey setup"><code>s, err := valkey.New(ctx, valkey.Config{
+	Addr: <span class="tok-str">"cache.example.com:6379"</span>,
+	Password: password,
+	TLS: &amp;tls.Config{MinVersion: tls.VersionTLS12},
+})
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> s.Close()</code></pre></div>
+</article>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../rdb/index.html">← rdb</a>
+<a href="../index.html#modules">All modules →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>

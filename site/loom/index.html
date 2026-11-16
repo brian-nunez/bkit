@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Graphs of typed Go functions, run in parallel on a worker pool you can grow and shrink while it runs.">
+<title>loom | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html">objex</a>
+<a href="../gate/index.html">gate</a>
+<a href="../loom/index.html" aria-current="page">loom</a>
+<a href="../settings/index.html">settings</a>
+<a href="../rdb/index.html">rdb</a>
+<a href="../stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / loom</p>
+<h1>loom</h1>
+<p class="lead">Graphs of typed Go functions, run in parallel on a worker pool you can grow and shrink while it runs.</p>
+<p>A task is a plain function. loom starts each task as soon as its parents are done, passes their values in with their real types, and reports what happened. Retries, timeouts, and failure handling are options you set. loom never logs. Hooks report every event. It uses only the standard library and has no drivers.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/loom">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/loom">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install loom / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install loom" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install loom"><code>go get github.com/brian-nunez/bkit/loom</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import loom / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import loom" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import loom"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/loom"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#usage">Usage</a>
+<a href="#failure-handling">Failure handling</a>
+<a href="#options">Options</a>
+<a href="#pools-and-hooks">Pools and hooks</a>
+<a href="#errors">Errors</a>
+</nav>
+<div class="article-content">
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Usage</h2>
+<h3>Tasks and dependencies</h3>
+<p><code>Add</code> puts a function in a graph and returns a typed handle. <code>After</code> declares the tasks it depends on, and <code>Get</code> reads their values. Every task has the shape <code>func(ctx context.Context, in *loom.Inputs) (T, error)</code>. Graph mistakes, such as a duplicate name, a parent from another graph, or a cycle, fail <code>Validate</code> and <code>Run</code> before any task starts.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Run a task graph / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Run a task graph" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Run a task graph"><code>g := loom.New()
+users := loom.Add(g, <span class="tok-str">&quot;users&quot;</span>, fetchUsers)
+orders := loom.Add(g, <span class="tok-str">&quot;orders&quot;</span>, fetchOrders)
+report := loom.Add(g, <span class="tok-str">&quot;report&quot;</span>, <span class="tok-kw">func</span>(ctx context.Context, in *loom.Inputs) (Report, error) {
+	<span class="tok-kw">return</span> build(loom.Get(in, users), loom.Get(in, orders)), <span class="tok-kw">nil</span>
+}, loom.After(users, orders))
+
+res, err := g.Run(ctx)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+fmt.Println(loom.Get(res, report))</code></pre></div>
+<h3>Named dependencies and results</h3>
+<p><code>AfterName</code> declares parents by name, so a task can depend on a task added after it. Names resolve when the graph runs. <code>Run</code> returns a <code>*loom.Result</code> even when it fails, so <code>res.State(task)</code> and <code>res.Err(task)</code> are always available. A graph can run any number of times, concurrently.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Depend on a task by name / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Depend on a task by name" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Depend on a task by name"><code><span class="tok-kw">var</span> users *loom.Task[[]User]
+count := loom.Add(g, <span class="tok-str">&quot;count&quot;</span>, <span class="tok-kw">func</span>(ctx context.Context, in *loom.Inputs) (<span class="tok-kw">int</span>, error) {
+	<span class="tok-kw">return</span> len(loom.Get(in, users)), <span class="tok-kw">nil</span>
+}, loom.AfterName(<span class="tok-str">&quot;users&quot;</span>))
+users = loom.Add(g, <span class="tok-str">&quot;users&quot;</span>, fetchUsers)</code></pre></div>
+</section>
+<section id="failure-handling" aria-labelledby="failure-handling-title">
+<h2 id="failure-handling-title">Failure handling</h2>
+<p>A trigger rule decides whether a task with parents runs once they are done. The default is <code>AllSuccess</code>. <code>AllDone</code> runs cleanup whatever happened, and <code>Lookup</code> reports whether a parent produced a value. Any <code>func(parents []loom.State) bool</code> is a trigger too.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Task states">
+<table>
+<thead><tr><th scope="col">Task State</th><th scope="col">Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>Succeeded</code></td><td>Returned a nil error</td></tr>
+<tr><td><code>Failed</code></td><td>Returned an error, panicked, or ran out of retries</td></tr>
+<tr><td><code>Skipped</code></td><td>Returned <code>loom.ErrSkip</code>, or its trigger rule declined without a failed parent</td></tr>
+<tr><td><code>UpstreamFailed</code></td><td>Its trigger rule declined because a parent failed</td></tr>
+<tr><td><code>Canceled</code></td><td>The run's context ended, <code>FailFast</code> stopped the run, or the pool closed</td></tr>
+</tbody>
+</table>
+</div>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Trigger rules">
+<table>
+<thead><tr><th scope="col">Trigger</th><th scope="col">Runs the Task When</th></tr></thead>
+<tbody>
+<tr><td><code>loom.AllSuccess</code></td><td>Every parent succeeded (default)</td></tr>
+<tr><td><code>loom.AllDone</code></td><td>Every parent is done, whatever its state</td></tr>
+<tr><td><code>loom.AllFailed</code></td><td>Every parent failed or was upstream-failed</td></tr>
+<tr><td><code>loom.OneSuccess</code></td><td>At least one parent succeeded</td></tr>
+<tr><td><code>loom.OneFailed</code></td><td>At least one parent failed or was upstream-failed</td></tr>
+<tr><td><code>loom.NoneFailed</code></td><td>No parent failed or was upstream-failed</td></tr>
+</tbody>
+</table>
+</div>
+<div class="codebox">
+<div class="codebar">
+<span>Run cleanup with AllDone / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Run cleanup with AllDone" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Run cleanup with AllDone"><code>loom.Add(g, <span class="tok-str">&quot;cleanup&quot;</span>, <span class="tok-kw">func</span>(ctx context.Context, in *loom.Inputs) (<span class="tok-kw">struct</span>{}, error) {
+	<span class="tok-kw">if</span> files, ok := loom.Lookup(in, download); ok {
+		removeAll(files.Paths)
+	}
+	<span class="tok-kw">return</span> <span class="tok-kw">struct</span>{}{}, <span class="tok-kw">nil</span>
+}, loom.After(download, upload), loom.WithTrigger(loom.AllDone))</code></pre></div>
+<h3>Retries and resuming</h3>
+<p>Tasks are retried only by a policy you pass to <code>WithRetry</code>. The policy sees each failed attempt and returns a delay and whether to retry. <code>loom.Backoff</code> is a ready-made exponential backoff policy. <code>loom.FailFast()</code> stops a run at its first failure. <code>loom.Resume(prev)</code> reruns only the tasks that did not succeed or skip in an earlier result, and reuses the values of those that did.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Retry and resume / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Retry and resume" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Retry and resume"><code>policy := <span class="tok-kw">func</span>(a loom.Attempt) (time.Duration, <span class="tok-kw">bool</span>) {
+	<span class="tok-kw">switch</span> {
+	<span class="tok-kw">case</span> errors.Is(a.Err, loom.ErrInterrupted):
+		<span class="tok-kw">return</span> 0, true
+	<span class="tok-kw">case</span> errors.Is(a.Err, errBadInput):
+		<span class="tok-kw">return</span> 0, false
+	<span class="tok-kw">default</span>:
+		<span class="tok-kw">return</span> loom.Backoff(3, time.Second, 30*time.Second)(a)
+	}
+}
+g := loom.New(loom.WithRetry(policy), loom.WithTimeout(time.Minute))
+
+res, err := g.Run(ctx)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	res, err = g.Run(ctx, loom.Resume(res))
+}</code></pre></div>
+</section>
+<section id="options" aria-labelledby="options-title">
+<h2 id="options-title">Options</h2>
+<p>Settings on <code>New</code> are defaults for every task in the graph. The same options on <code>Add</code> override them for one task, and <code>loom.WithRetry(nil)</code> turns retries off.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Configuration options">
+<table>
+<thead><tr><th scope="col">Option</th><th scope="col">On</th><th scope="col">Effect</th><th scope="col">Default</th></tr></thead>
+<tbody>
+<tr><td><code>loom.After(tasks...)</code></td><td><code>Add</code></td><td>The task's parents</td><td>No parents</td></tr>
+<tr><td><code>loom.AfterName(names...)</code></td><td><code>Add</code></td><td>The task's parents, by name</td><td>No parents</td></tr>
+<tr><td><code>loom.WithRetry(policy)</code></td><td><code>New</code>, <code>Add</code></td><td>Retry policy</td><td>No retries</td></tr>
+<tr><td><code>loom.WithTimeout(d)</code></td><td><code>New</code>, <code>Add</code></td><td>Limit for each attempt</td><td>No limit</td></tr>
+<tr><td><code>loom.WithTrigger(t)</code></td><td><code>New</code>, <code>Add</code></td><td>Trigger rule</td><td><code>AllSuccess</code></td></tr>
+<tr><td><code>loom.WithName(name)</code></td><td><code>New</code></td><td>Name carried by every event</td><td>Empty</td></tr>
+<tr><td><code>loom.AllowCycles()</code></td><td><code>New</code></td><td>Skip the cycle check</td><td>Cycles fail the run</td></tr>
+<tr><td><code>loom.WithPool(p)</code></td><td><code>New</code>, <code>Run</code></td><td>Pool that runs the tasks</td><td>A private pool per run</td></tr>
+<tr><td><code>loom.FailFast()</code></td><td><code>New</code>, <code>Run</code></td><td>Stop at the first failure</td><td>Off</td></tr>
+<tr><td><code>loom.WithHooks(h)</code></td><td><code>New</code>, <code>Run</code>, <code>NewPool</code></td><td>Event callbacks</td><td>None</td></tr>
+<tr><td><code>loom.Resume(prev)</code></td><td><code>Run</code></td><td>Rerun what did not succeed in <code>prev</code></td><td>Off</td></tr>
+<tr><td><code>loom.WithWorkers(n)</code></td><td><code>NewPool</code></td><td>Starting worker count</td><td><code>runtime.GOMAXPROCS(0)</code></td></tr>
+<tr><td><code>loom.Interrupt()</code></td><td><code>Shrink</code></td><td>Cancel the removed workers' tasks</td><td>Off</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="pools-and-hooks" aria-labelledby="pools-and-hooks-title">
+<h2 id="pools-and-hooks-title">Pools and hooks</h2>
+<h3>Elastic worker pools</h3>
+<p>A pool is a set of workers that any number of graphs and runs share. <code>Grow</code> and <code>Shrink</code> change its size while it runs. With <code>Interrupt</code>, <code>Shrink</code> cancels the removed workers' tasks with the cause <code>loom.ErrInterrupted</code>, and the task's retry policy decides whether it runs again on another worker. <code>Shrink</code> to zero pauses the pool until <code>Grow</code>. <code>Shutdown(ctx)</code> stops the pool and gives running tasks until ctx ends to finish. <code>Close</code> is Shutdown with no deadline.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Resize a shared worker pool / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Resize a shared worker pool" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Resize a shared worker pool"><code>pool, err := loom.NewPool(loom.WithWorkers(4))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> pool.Close()
+
+g := loom.New(loom.WithPool(pool))
+
+pool.Grow(4)
+pool.Shrink(2)
+pool.Shrink(2, loom.Interrupt())</code></pre></div>
+<h3>Hooks and untrusted task isolation</h3>
+<p>Hooks are callbacks for events. loom calls them in order on a separate goroutine, so a slow hook never delays a task. Every task, trigger, retry policy, and hook runs isolated on its own goroutine. A panic or <code>runtime.Goexit</code> in a task or trigger is recovered and reported as <code>ErrPanic</code>, and a failing hook is dropped.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Observe task events / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Observe task events" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Observe task events"><code>g := loom.New(loom.WithName(<span class="tok-str">&quot;ingest&quot;</span>), loom.WithHooks(loom.Hooks{
+	OnTaskFinish: <span class="tok-kw">func</span>(ctx context.Context, e loom.TaskEvent) {
+		slog.InfoContext(ctx, <span class="tok-str">&quot;task&quot;</span>, <span class="tok-str">&quot;graph&quot;</span>, e.Graph, <span class="tok-str">&quot;task&quot;</span>, e.Task,
+			<span class="tok-str">&quot;state&quot;</span>, e.State, <span class="tok-str">&quot;attempt&quot;</span>, e.Attempt, <span class="tok-str">&quot;err&quot;</span>, e.Err)
+	},
+}))</code></pre></div>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Event hooks">
+<table>
+<thead><tr><th scope="col">Hook</th><th scope="col">Called When</th></tr></thead>
+<tbody>
+<tr><td><code>OnRunStart</code>, <code>OnRunFinish</code></td><td>A run starts or returns (<code>RunEvent</code>)</td></tr>
+<tr><td><code>OnTaskStart</code></td><td>An attempt starts on a worker (<code>TaskEvent</code>)</td></tr>
+<tr><td><code>OnTaskRetry</code></td><td>A failed attempt will run again (<code>TaskEvent</code>)</td></tr>
+<tr><td><code>OnTaskFinish</code></td><td>A task reaches a final state (<code>TaskEvent</code>)</td></tr>
+<tr><td><code>OnWorkerStart</code>, <code>OnWorkerStop</code></td><td>A worker joins or leaves a pool (<code>WorkerEvent</code>)</td></tr>
+<tr><td><code>OnResize</code></td><td><code>Grow</code> or <code>Shrink</code> changes a pool's size (<code>ResizeEvent</code>)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Errors</h2>
+<p>A task that does not succeed reports a <code>*loom.Error</code> with the task's name, the attempt, a <code>Kind</code>, and the task's own error. <code>Run</code> joins the errors of every failed task. Match them with <code>errors.Is</code> and <code>errors.As</code>. When the run's context ends, the error also matches <code>context.Cause(ctx)</code>.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Error sentinels">
+<table>
+<thead><tr><th scope="col">Sentinel</th><th scope="col">Meaning</th></tr></thead>
+<tbody>
+<tr><td><code>ErrInvalidGraph</code></td><td>A nil graph or function, an empty or duplicate name, a foreign or unknown parent, a cycle, or an <code>Add</code> after <code>Run</code></td></tr>
+<tr><td><code>ErrCycle</code></td><td>Tasks that depend on each other in a loop. Also matches <code>ErrInvalidGraph</code></td></tr>
+<tr><td><code>ErrInvalidOption</code></td><td>An out-of-range option, a nil option or context, a foreign <code>Resume</code> result, or a pool not made by <code>NewPool</code></td></tr>
+<tr><td><code>ErrSkip</code></td><td>Returned by a task to mark it <code>Skipped</code></td></tr>
+<tr><td><code>ErrUpstream</code></td><td>Kind of a task whose trigger rule saw a failed parent</td></tr>
+<tr><td><code>ErrTimeout</code></td><td>Kind of an attempt that failed after its timeout</td></tr>
+<tr><td><code>ErrPanic</code></td><td>Kind of an attempt or trigger that panicked or called <code>runtime.Goexit</code></td></tr>
+<tr><td><code>ErrInterrupted</code></td><td>Kind of an attempt that failed after its worker was interrupted</td></tr>
+<tr><td><code>ErrClosed</code></td><td>A pool call after <code>Shutdown</code>, or a task that could not start because its pool closed</td></tr>
+<tr><td><code>ErrInvalidSize</code></td><td>A <code>Grow</code> or <code>Shrink</code> count below one, or a <code>Shrink</code> larger than the pool</td></tr>
+<tr><td><code>ErrNestedRun</code></td><td>A run inside a task on the same pool</td></tr>
+</tbody>
+</table>
+</div>
+<div class="codebox">
+<div class="codebar">
+<span>Inspect a task error / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Inspect a task error" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Inspect a task error"><code>res, err := g.Run(ctx)
+<span class="tok-kw">var</span> e *loom.Error
+<span class="tok-kw">if</span> errors.As(err, &amp;e) {
+	log.Printf(<span class="tok-str">&quot;task %s failed on attempt %d: %v&quot;</span>, e.Task, e.Attempt, e.Err)
+}
+<span class="tok-kw">if</span> errors.Is(err, loom.ErrTimeout) {
+	// At least one task timed out.
+}</code></pre></div>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../gate/index.html">← gate</a>
+<a href="../settings/index.html">settings →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Load configuration from files, environment variables, remote stores, and code, and merge it into one tree.">
+<title>settings | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html">objex</a>
+<a href="../gate/index.html">gate</a>
+<a href="../loom/index.html">loom</a>
+<a href="../settings/index.html" aria-current="page">settings</a>
+<a href="../rdb/index.html">rdb</a>
+<a href="../stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / settings</p>
+<h1>settings</h1>
+<p class="lead">Load configuration from files, environment variables, remote stores, and code, and merge it into one tree.</p>
+<p>Each source returns a tree of values. A format turns bytes into a tree, so any source that reads bytes works with any format. JSON, files, <code>fs.FS</code>, environment variables, and maps are built into the parent module. Other formats and remote stores live in driver modules.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/settings">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/settings">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install settings / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings"><code>go get github.com/brian-nunez/bkit/settings</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import settings / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import settings" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import settings"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/settings"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#drivers">Sources and drivers</a>
+<a href="#usage">Usage</a>
+<a href="#errors">Errors</a>
+<a href="#driver-setup">Driver setup</a>
+</nav>
+<div class="article-content">
+<section id="drivers" aria-labelledby="drivers-title">
+<h2 id="drivers-title">Sources and drivers</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Reference table">
+<table>
+<thead>
+<tr>
+<th scope="col">Component</th>
+<th scope="col">Install / Call</th>
+<th scope="col">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<strong>Built-in Sources</strong>
+</td>
+<td>
+<code>settings.File</code>, <code>settings.FileFS</code>, <code>settings.Env</code>, <code>settings.Map</code>
+</td>
+<td>Read disk files, <code>embed.FS</code> files, environment variables, and in-code maps. <code>settings.JSON</code> is built in.</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-yaml">yaml</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/settings/drivers/yaml</code>
+</td>
+<td>
+<code>yaml.Format</code> decodes YAML bytes into a settings tree for <code>settings.File</code>, <code>settings.FileFS</code>, or <code>consul.Client.Key</code>.</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-toml">toml</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/settings/drivers/toml</code>
+</td>
+<td>
+<code>toml.Format</code> decodes TOML bytes into a settings tree for <code>settings.File</code>, <code>settings.FileFS</code>, or <code>consul.Client.Key</code>.</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-vault">vault</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/settings/drivers/vault</code>
+</td>
+<td>Reads HashiCorp Vault key-value secrets over HTTP using the standard library.</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-consul">consul</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/settings/drivers/consul</code>
+</td>
+<td>Reads single formatted keys or key prefixes from HashiCorp Consul over HTTP using the standard library.</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Usage</h2>
+<p>
+<code>Load</code> applies sources from left to right, and the later source wins. Two maps merge key by key. All keys and lookup paths are lowercased and joined with dots. <code>settings.Env</code> splits nested keys on a double underscore (<code>__</code>), so <code>APP_SERVER__PORT=8080</code> with <code>WithPrefix("APP_")</code> sets <code>server.port</code>.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Load and read configuration / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Load and read configuration" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Load and read configuration"><code>cfg, err := settings.Load(ctx,
+	settings.Map(map[<span class="tok-kw">string</span>]any{<span class="tok-str">"server"</span>: map[<span class="tok-kw">string</span>]any{<span class="tok-str">"addr"</span>: <span class="tok-str">":80"</span>}}),
+	settings.File(<span class="tok-str">"config.yaml"</span>, yaml.Format),
+	settings.Env(settings.WithPrefix(<span class="tok-str">"APP_"</span>)),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+addr := cfg.GetString(<span class="tok-str">"server.addr"</span>, <span class="tok-str">":8080"</span>)
+port, err := settings.Get[int](cfg, <span class="tok-str">"server.port"</span>)
+
+<span class="tok-kw">var</span> app AppConfig
+err = cfg.Decode(&amp;app)</code></pre></div>
+<h3>Reading methods</h3>
+<p><code>cfg.GetString</code>, <code>GetInt</code>, <code>GetBool</code>, <code>GetFloat</code>, and <code>GetDuration</code> return the default passed in when a key is missing or has the wrong type. <code>settings.Get[T](cfg, path)</code> returns <code>settings.ErrNotFound</code> or <code>settings.ErrType</code>. <code>cfg.Decode(&amp;target)</code> fills a struct by <code>settings:"name"</code> tag or field name, or merges into a map with string keys while keeping existing entries and merging nested maps key by key. JSON integers beyond <code>int64</code> read as <code>uint64</code>. Integers beyond <code>uint64</code> remain decimal strings and can be read as strings or converted to <code>float64</code>.</p>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Errors</h2>
+<p>Parent sentinels are <code>settings.ErrNotFound</code>, <code>settings.ErrType</code>, and <code>settings.ErrParse</code>. A conversion error names the key path and the value's type, and never includes the value, so a secret read as the wrong type stays out of logs. Messages omit error text from <code>encoding.TextUnmarshaler</code>. The Vault and Consul drivers also provide <code>ErrNotFound</code>, <code>ErrPermission</code>, <code>ErrResponse</code>, and <code>ErrInvalidAddress</code>, and never include tokens in error messages.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Error sentinels">
+<table>
+<thead>
+<tr>
+<th scope="col">Sentinel</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>settings.ErrNotFound</code>
+</td>
+<td>No value exists at the path</td>
+</tr>
+<tr>
+<td>
+<code>settings.ErrType</code>
+</td>
+<td>The value cannot be converted to the requested type</td>
+</tr>
+<tr>
+<td>
+<code>settings.ErrParse</code>
+</td>
+<td>A format could not parse a document</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="driver-setup" aria-labelledby="driver-setup-title">
+<h2 id="driver-setup-title">Driver setup</h2>
+<article class="driver-detail" id="driver-yaml">
+<h3>yaml</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/settings/drivers/yaml">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/settings/drivers/yaml">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install settings yaml / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings yaml" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings yaml"><code>go get github.com/brian-nunez/bkit/settings/drivers/yaml</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>yaml setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy yaml setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="yaml setup"><code>cfg, err := settings.Load(ctx,
+	settings.File(<span class="tok-str">"config.yaml"</span>, yaml.Format),
+)</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-toml">
+<h3>toml</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/settings/drivers/toml">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/settings/drivers/toml">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install settings toml / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings toml" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings toml"><code>go get github.com/brian-nunez/bkit/settings/drivers/toml</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>toml setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy toml setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="toml setup"><code>cfg, err := settings.Load(ctx,
+	settings.File(<span class="tok-str">"config.toml"</span>, toml.Format),
+)</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-vault">
+<h3>vault</h3>
+<p>Calls Vault over HTTP with the standard library. Supports <code>client.KV2(mount, path)</code>, <code>vault.WithVersion(n)</code>, <code>client.KV1(mount, path)</code>, <code>vault.WithToken</code>, <code>vault.WithNamespace</code>, and <code>vault.WithHTTPClient</code>. With a token set, redirects to another host or from https to http are not followed and fail with <code>vault.ErrResponse</code>. A custom <code>CheckRedirect</code> on the client passed to <code>vault.WithHTTPClient</code> sets the redirect policy.</p>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/settings/drivers/vault">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/settings/drivers/vault">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install settings vault / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings vault" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings vault"><code>go get github.com/brian-nunez/bkit/settings/drivers/vault</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>vault setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy vault setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="vault setup"><code>client, err := vault.New(<span class="tok-str">"https://vault.example.com:8200"</span>,
+	vault.WithToken(token),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+cfg, err := settings.Load(ctx,
+	settings.File(<span class="tok-str">"config.yaml"</span>, yaml.Format),
+	client.KV2(<span class="tok-str">"secret"</span>, <span class="tok-str">"apps/web"</span>),
+)</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-consul">
+<h3>consul</h3>
+<p>Calls Consul over HTTP with the standard library. <code>client.Key(key, format)</code> parses a single document with any format, and <code>client.Prefix(prefix)</code> reads every key under a prefix into nested keys. With a token set, redirects to another host or from https to http are not followed and fail with <code>consul.ErrResponse</code>. A custom <code>CheckRedirect</code> on the client passed to <code>consul.WithHTTPClient</code> sets the redirect policy.</p>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/settings/drivers/consul">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/settings/drivers/consul">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install settings consul / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings consul" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings consul"><code>go get github.com/brian-nunez/bkit/settings/drivers/consul</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>consul setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy consul setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="consul setup"><code>client, err := consul.New(<span class="tok-str">"http://localhost:8500"</span>,
+	consul.WithToken(token),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+cfg, err := settings.Load(ctx,
+	client.Key(<span class="tok-str">"apps/web/config.yaml"</span>, yaml.Format),
+	client.Prefix(<span class="tok-str">"apps/web/overrides"</span>),
+	settings.Env(settings.WithPrefix(<span class="tok-str">"APP_"</span>)),
+)</code></pre></div>
+</article>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../loom/index.html">← loom</a>
+<a href="../rdb/index.html">rdb →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>
