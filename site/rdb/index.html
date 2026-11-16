@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="One API over relational databases.">
+<title>rdb | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html">objex</a>
+<a href="../gate/index.html">gate</a>
+<a href="../loom/index.html">loom</a>
+<a href="../settings/index.html">settings</a>
+<a href="../rdb/index.html" aria-current="page">rdb</a>
+<a href="../stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / rdb</p>
+<h1>rdb</h1>
+<p class="lead">One API over relational databases.</p>
+<p>Open any supported database from a URL or typed config struct, run queries with <code>?</code> placeholders, scan rows into structs, run transactions, apply schema migrations, and match errors the same way on every database. Each driver is a separate module so an application installs only the drivers it uses.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/rdb">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/rdb">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install rdb / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install rdb" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install rdb"><code>go get github.com/brian-nunez/bkit/rdb</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import rdb / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import rdb" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import rdb"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/rdb"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#drivers">Drivers</a>
+<a href="#usage">Usage</a>
+<a href="#migrations">Migrations</a>
+<a href="#errors">Pool options and errors</a>
+<a href="#driver-setup">Driver setup</a>
+</nav>
+<div class="article-content">
+<section id="drivers" aria-labelledby="drivers-title">
+<h2 id="drivers-title">Drivers</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Reference table">
+<table>
+<thead>
+<tr>
+<th scope="col">Driver</th>
+<th scope="col">Install Command</th>
+<th scope="col">Database &amp; Engine</th>
+<th scope="col">URL Schemes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<a href="#driver-sqlite">sqlite</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/rdb/drivers/sqlite</code>
+</td>
+<td>SQLite in pure Go (<code>modernc.org/sqlite</code>), no cgo required. Enables foreign keys, 5s busy timeout, and WAL on files.</td>
+<td>
+<code>sqlite:</code>, <code>sqlite3:</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-postgres">postgres</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/rdb/drivers/postgres</code>
+</td>
+<td>PostgreSQL via <code>pgx</code>. Rewrites <code>?</code> placeholders to <code>$1, $2</code>.</td>
+<td>
+<code>postgres:</code>, <code>postgresql:</code>
+</td>
+</tr>
+<tr>
+<td>
+<a href="#driver-mysql">mysql</a>
+</td>
+<td>
+<code>go get github.com/brian-nunez/bkit/rdb/drivers/mysql</code>
+</td>
+<td>MySQL and MariaDB via <code>go-sql-driver/mysql</code>. Defaults <code>parseTime</code> to <code>true</code>.</td>
+<td>
+<code>mysql:</code>, <code>mariadb:</code>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Usage</h2>
+<h3>Opening by URL or Config</h3>
+<p>Pass the drivers the application supports to <code>rdb.Open</code>. The URL scheme selects one driver, and only that driver connects. Every driver also provides a typed <code>Open(ctx, Config{...})</code> constructor.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Open by URL / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Open by URL" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Open by URL"><code>db, err := rdb.Open(ctx, os.Getenv(<span class="tok-str">"DATABASE_URL"</span>),
+	sqlite.Driver(),
+	postgres.Driver(),
+	rdb.WithMaxOpenConns(25),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()</code></pre></div>
+<h3>Queries and strict scanning</h3>
+<p>
+<code>rdb.One[T]</code>, <code>rdb.All[T]</code>, and <code>rdb.Each[T]</code> scan rows into structs or scalar values. Struct fields match by <code>db:"name"</code> tag or field name (ignoring case and underscores, so <code>CreatedAt</code> matches <code>created_at</code>). Unmatched columns return <code>rdb.ErrScan</code> unless <code>rdb.WithoutStrictScan()</code> is set.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Query and scan rows / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Query and scan rows" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Query and scan rows"><code><span class="tok-kw">type</span> User <span class="tok-kw">struct</span> {
+	ID        <span class="tok-kw">int64</span>  <span class="tok-str">`db:"id"`</span>
+	Email     <span class="tok-kw">string</span> <span class="tok-str">`db:"email"`</span>
+	CreatedAt time.Time
+}
+
+user, err := rdb.One[User](ctx, db,
+	<span class="tok-str">"SELECT id, email, created_at FROM users WHERE email = ?"</span>, email)
+
+<span class="tok-kw">for</span> user, err := <span class="tok-kw">range</span> rdb.Each[User](ctx, db, <span class="tok-str">"SELECT id, email, created_at FROM users"</span>) {
+	<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+		<span class="tok-kw">return</span> err
+	}
+	process(user)
+}</code></pre></div>
+<h3>Placeholders and transactions</h3>
+<p>Write <code>?</code> for every parameter. Use <code>db.Raw()</code> or <code>tx.Raw()</code> to send a single query without placeholder rewriting (for example, PostgreSQL <code>jsonb</code> <code>?</code> operators). <code>db.Tx</code> commits when the callback returns <code>nil</code> and rolls back on error or panic.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Run a transaction / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Run a transaction" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Run a transaction"><code>err := db.Tx(ctx, <span class="tok-kw">func</span>(tx *rdb.Tx) error {
+	_, err := tx.Exec(ctx, <span class="tok-str">"UPDATE accounts SET balance = balance - ? WHERE id = ?"</span>, amount, from)
+	<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+		<span class="tok-kw">return</span> err
+	}
+	_, err = tx.Exec(ctx, <span class="tok-str">"UPDATE accounts SET balance = balance + ? WHERE id = ?"</span>, amount, to)
+	<span class="tok-kw">return</span> err
+}, rdb.Isolation(sql.LevelSerializable))</code></pre></div>
+</section>
+<section id="migrations" aria-labelledby="migrations-title">
+<h2 id="migrations-title">Migrations</h2>
+<p>Keep migrations as <code>.sql</code> files and apply them at startup with <code>db.Migrate</code>. <code>Migrate</code> applies every pending migration in version order, records each one in the <code>rdb_migrations</code> table, and returns the migrations it applied. It reads the root of the file system, so use <code>fs.Sub</code> for a subdirectory. Running it again applies only new files. <code>db.MigrationStatus(ctx, migrations)</code> returns every migration with <code>AppliedAt</code> set on those that have run, without changing the database.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Apply embedded migrations / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Apply embedded migrations" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Apply embedded migrations"><code>//go:embed migrations/*.sql
+<span class="tok-kw">var</span> files embed.FS
+
+migrations, err := fs.Sub(files, <span class="tok-str">&quot;migrations&quot;</span>)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+applied, err := db.Migrate(ctx, migrations)</code></pre></div>
+<h3>File names and statements</h3>
+<p>A file name is a positive version number, an underscore, a name of letters, digits, <code>_</code>, and <code>-</code>, an optional dialect (<code>sqlite</code>, <code>postgres</code>, or <code>mysql</code>), and <code>.sql</code>. A dialect file such as <code>0001_create_users.postgres.sql</code> runs on that dialect in place of the plain file. Statements end at semicolons outside quotes and comments, and each one is sent without placeholder rewriting. Wrap a statement whose body contains semicolons, such as a trigger, between <code>-- rdb:begin-statement</code> and <code>-- rdb:end-statement</code>.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Multi-statement trigger directive / sql</span>
+<button class="copy-btn" type="button" aria-label="Copy Multi-statement trigger directive" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Multi-statement trigger directive"><code>CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT NOT NULL);
+
+-- rdb:begin-statement
+CREATE TRIGGER users_audit AFTER INSERT ON users
+BEGIN
+  INSERT INTO audit (user_id) VALUES (NEW.id);
+END;
+-- rdb:end-statement</code></pre></div>
+<h3>Transactions, locking, and history</h3>
+<p>SQLite and Postgres apply each migration and its history row in one transaction. MySQL and MariaDB commit schema changes as they run, so a migration there, or a file starting with <code>-- rdb:no-transaction</code> on any database, is recorded as dirty before it starts and marked finished at the end. A dirty migration stops later runs with <code>ErrMigrationDirty</code>. Concurrent instances take turns using an advisory lock on Postgres, <code>GET_LOCK</code> on MySQL and MariaDB, and the database write lock on SQLite. Use <code>rdb.MigrationTable(name)</code> to store history in another table.</p>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Pool options and errors</h2>
+<p>
+<code>WithMaxOpenConns</code>, <code>WithMaxIdleConns</code>, <code>WithConnMaxLifetime</code>, <code>WithConnMaxIdleTime</code>, <code>WithWarmConns</code>, <code>WithPool(rdb.Pool{...})</code>, <code>WithConnInit</code>, <code>WithConnectTimeout</code>, <code>WithOpenRetry</code>, <code>WithOpenTimeout</code>, <code>WithoutRebind()</code>, and <code>WithoutStrictScan()</code>.</p>
+<p>Match with <code>errors.Is</code>: <code>ErrNotFound</code> (also matches <code>sql.ErrNoRows</code>), <code>ErrUniqueViolation</code>, <code>ErrForeignKeyViolation</code>, <code>ErrNotNullViolation</code>, <code>ErrCheckViolation</code>, <code>ErrRetryable</code>, <code>ErrScan</code>, <code>ErrUnknownDriver</code>, <code>ErrInvalidURL</code>, <code>ErrInvalidOption</code>, <code>ErrInvalidMigration</code>, <code>ErrMigrationChanged</code>, <code>ErrMigrationMismatch</code>, and <code>ErrMigrationDirty</code>. <code>Error</code> messages never contain the database URL or credentials.</p>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Error sentinels">
+<table>
+<thead>
+<tr>
+<th scope="col">Sentinel</th>
+<th scope="col">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>ErrNotFound</code>
+</td>
+<td>
+<code>One</code> found no rows. Also matches <code>sql.ErrNoRows</code>
+</td>
+</tr>
+<tr>
+<td>
+<code>ErrUniqueViolation</code>
+</td>
+<td>A duplicate value in a unique index or primary key</td>
+</tr>
+<tr>
+<td>
+<code>ErrForeignKeyViolation</code>
+</td>
+<td>A write that breaks a foreign key</td>
+</tr>
+<tr>
+<td>
+<code>ErrNotNullViolation</code>
+</td>
+<td>A null in a <code>NOT NULL</code> column</td>
+</tr>
+<tr>
+<td>
+<code>ErrCheckViolation</code>
+</td>
+<td>A write that fails a <code>CHECK</code> constraint</td>
+</tr>
+<tr>
+<td>
+<code>ErrRetryable</code>
+</td>
+<td>A deadlock, serialization failure, or locked database</td>
+</tr>
+<tr>
+<td>
+<code>ErrScan</code>
+</td>
+<td>Rows that cannot be scanned into the requested type</td>
+</tr>
+<tr>
+<td>
+<code>ErrUnknownDriver</code>
+</td>
+<td>No driver matches the URL's scheme</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidURL</code>
+</td>
+<td>The URL cannot be parsed or has no scheme</td>
+</tr>
+<tr>
+<td>
+<code>ErrInvalidOption</code>
+</td>
+<td>An option is out of range or conflicts</td>
+</tr>
+<tr><td><code>ErrInvalidMigration</code></td><td>A file name is invalid, a version has duplicate or missing dialect files, a directive is misused, or there are no files</td></tr>
+<tr><td><code>ErrMigrationChanged</code></td><td>An applied migration file changed</td></tr>
+<tr><td><code>ErrMigrationMismatch</code></td><td>An applied migration is missing from the files, or a pending file sorts before an applied one</td></tr>
+<tr><td><code>ErrMigrationDirty</code></td><td>A migration started and did not finish</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="driver-setup" aria-labelledby="driver-setup-title">
+<h2 id="driver-setup-title">Driver setup</h2>
+<article class="driver-detail" id="driver-sqlite">
+<h3>sqlite</h3>
+<p>Enables foreign keys, a 5-second busy timeout, and WAL on files. An in-memory database is limited to one connection and keeps its data until the <code>rdb.DB</code> is closed, even when the pool replaces the connection. <code>rdb.Isolation</code> accepts every level up to <code>sql.LevelSerializable</code>, including <code>sql.LevelSnapshot</code>. <code>sql.LevelWriteCommitted</code> and <code>sql.LevelLinearizable</code> fail.</p>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/rdb/drivers/sqlite">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/rdb/drivers/sqlite">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install rdb sqlite / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install rdb sqlite" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install rdb sqlite"><code>go get github.com/brian-nunez/bkit/rdb/drivers/sqlite</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>sqlite setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy sqlite setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="sqlite setup"><code>db, err := sqlite.Open(ctx, sqlite.Config{
+	Path: <span class="tok-str">"app.db"</span>,
+}, rdb.WithMaxOpenConns(4))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-postgres">
+<h3>postgres</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/rdb/drivers/postgres">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/rdb/drivers/postgres">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install rdb postgres / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install rdb postgres" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install rdb postgres"><code>go get github.com/brian-nunez/bkit/rdb/drivers/postgres</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>postgres setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy postgres setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="postgres setup"><code>db, err := postgres.Open(ctx, postgres.Config{
+	Host: <span class="tok-str">"db.example.com"</span>,
+	Database: <span class="tok-str">"app"</span>,
+	User: user,
+	Password: password,
+	SSLMode: <span class="tok-str">"verify-full"</span>,
+}, rdb.WithMaxOpenConns(20))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()</code></pre></div>
+</article>
+<article class="driver-detail" id="driver-mysql">
+<h3>mysql</h3>
+<p>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit/rdb/drivers/mysql">API reference ↗</a> · <a href="https://github.com/brian-nunez/bkit/tree/main/rdb/drivers/mysql">View source ↗</a>
+</p>
+<div class="codebox">
+<div class="codebar">
+<span>Install rdb mysql / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install rdb mysql" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install rdb mysql"><code>go get github.com/brian-nunez/bkit/rdb/drivers/mysql</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>mysql setup / go</span>
+<button class="copy-btn" type="button" aria-label="Copy mysql setup" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="mysql setup"><code>db, err := mysql.Open(ctx, mysql.Config{
+	Host: <span class="tok-str">"db.example.com"</span>,
+	Database: <span class="tok-str">"app"</span>,
+	User: user,
+	Password: password,
+}, rdb.WithMaxOpenConns(20))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()</code></pre></div>
+</article>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../settings/index.html">← settings</a>
+<a href="../stash/index.html">stash →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>

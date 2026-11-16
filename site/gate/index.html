@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Small, typed rules you can combine, plus checks that tell you which rule failed.">
+<title>gate | bkit</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/style.css">
+<script src="../assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="../index.html">
+<img src="../assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="../objex/index.html">objex</a>
+<a href="../gate/index.html" aria-current="page">gate</a>
+<a href="../loom/index.html">loom</a>
+<a href="../settings/index.html">settings</a>
+<a href="../rdb/index.html">rdb</a>
+<a href="../stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap">
+<p class="breadcrumb">
+<a href="../index.html">bkit</a> / gate</p>
+<h1>gate</h1>
+<p class="lead">Small, typed rules you can combine, plus checks that tell you which rule failed.</p>
+<p>A rule is a <code>func(T) bool</code> over any type. <code>gate</code> combines rules with <code>And</code>, <code>Or</code>, <code>Not</code>, <code>Xor</code>, <code>Requires</code>, <code>All</code>, <code>Any</code>, <code>None</code>, and <code>AtLeast</code>, filters iterators, and turns rules into checks that return errors. It uses only the standard library. Evaluating a composed rule does not allocate.</p>
+<div class="actions">
+<a class="btn" href="https://pkg.go.dev/github.com/brian-nunez/bkit/gate">API reference ↗</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/gate">View source ↗</a>
+</div>
+<div id="install">
+<div class="codebox">
+<div class="codebar">
+<span>Install gate / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install gate" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install gate"><code>go get github.com/brian-nunez/bkit/gate</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Import gate / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Import gate" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Import gate"><code>import <span class="tok-str">"github.com/brian-nunez/bkit/gate"</span></code></pre></div>
+</div>
+</div>
+</div>
+<div class="wrap article-layout">
+<nav class="jump-nav" aria-label="On this page">
+<span class="section-label">ON THIS PAGE</span>
+<a href="#install">Install</a>
+<a href="#combinators">Combinators</a>
+<a href="#usage">Rules and filtering</a>
+<a href="#checks">Checks</a>
+<a href="#errors">Errors</a>
+</nav>
+<div class="article-content">
+<section id="combinators" aria-labelledby="combinators-title">
+<h2 id="combinators-title">Combinators</h2>
+<div class="table-wrap" tabindex="0" role="region" aria-label="Reference table">
+<table>
+<thead>
+<tr>
+<th scope="col">Function</th>
+<th scope="col">Passes When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>
+<code>r.And(rules...)</code>
+</td>
+<td>
+<code>r</code> and all the other rules pass</td>
+</tr>
+<tr>
+<td>
+<code>r.Or(rules...)</code>
+</td>
+<td>
+<code>r</code> or any of the other rules pass</td>
+</tr>
+<tr>
+<td>
+<code>r.Not()</code>
+</td>
+<td>
+<code>r</code> fails</td>
+</tr>
+<tr>
+<td>
+<code>r.Xor(other)</code>
+</td>
+<td>Exactly one of <code>r</code> and <code>other</code> passes</td>
+</tr>
+<tr>
+<td>
+<code>r.Requires(then)</code>
+</td>
+<td>
+<code>r</code> fails, or both <code>r</code> and <code>then</code> pass</td>
+</tr>
+<tr>
+<td>
+<code>gate.All(rules...)</code>
+</td>
+<td>Every rule passes (true when empty)</td>
+</tr>
+<tr>
+<td>
+<code>gate.Any(rules...)</code>
+</td>
+<td>At least one rule passes (false when empty)</td>
+</tr>
+<tr>
+<td>
+<code>gate.None(rules...)</code>
+</td>
+<td>No rule passes (true when empty)</td>
+</tr>
+<tr>
+<td>
+<code>gate.AtLeast(n, rules...)</code>
+</td>
+<td>At least <code>n</code> rules pass (true when <code>n &lt;= 0</code>)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="usage" aria-labelledby="usage-title">
+<h2 id="usage-title">Rules and filtering</h2>
+<p>Any <code>func(T) bool</code> is a rule, and you call a rule like a function. Rules run left to right and stop once the answer is known. <code>r.Filter(seq)</code> returns an iterator of values from an <code>iter.Seq[T]</code> that pass the rule.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Compose access rules / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Compose access rules" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Compose access rules"><code><span class="tok-kw">type</span> Access <span class="tok-kw">struct</span> {
+	User User
+	Doc  Doc
+}
+
+<span class="tok-kw">type</span> rule = gate.Rule[Access]
+
+<span class="tok-kw">func</span> hasRole(role <span class="tok-kw">string</span>) rule {
+	<span class="tok-kw">return</span> <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> slices.Contains(a.User.Roles, role) }
+}
+
+<span class="tok-kw">var</span> (
+	isOwner  rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> a.User.ID == a.Doc.OwnerID }
+	isEditor rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> slices.Contains(a.Doc.Editors, a.User.ID) }
+	isDraft  rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> a.Doc.Draft }
+	isBanned rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> a.User.Banned }
+
+	canDelete = hasRole(<span class="tok-str">"admin"</span>).Or(hasRole(<span class="tok-str">"user"</span>).And(isOwner))
+	canView   = hasRole(<span class="tok-str">"admin"</span>).Or(gate.All(
+		isDraft.Requires(isOwner.Or(isEditor)),
+		gate.None(isBanned),
+	))
+)
+
+<span class="tok-kw">if</span> !canDelete(Access{User: user, Doc: doc}) {
+	<span class="tok-kw">return</span> ErrForbidden
+}</code></pre></div>
+<div class="codebox">
+<div class="codebar">
+<span>Filter matching orders / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Filter matching orders" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Filter matching orders"><code><span class="tok-kw">for</span> o := <span class="tok-kw">range</span> canShip.Filter(slices.Values(orders)) {
+	ship(o)
+}</code></pre></div>
+</section>
+<section id="checks" aria-labelledby="checks-title">
+<h2 id="checks-title">Checks</h2>
+<p>A check is a <code>func(T) error</code>. <code>r.Else(err)</code> returns <code>err</code> when <code>r</code> fails. Use <code>gate.Join</code> to collect every failure with <code>errors.Join</code>, or <code>gate.First</code> to stop at the first failure.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Collect validation failures / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Collect validation failures" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Collect validation failures"><code><span class="tok-kw">var</span> (
+	ErrBadPort    = errors.New(<span class="tok-str">"port must be 1-65535"</span>)
+	ErrAuthMethod = errors.New(<span class="tok-str">"set exactly one of password or cert file"</span>)
+)
+
+validate := gate.Join(
+	hasPort.Else(ErrBadPort),
+	hasPassword.Xor(hasCertFile).Else(ErrAuthMethod),
+)
+
+err := validate(cfg)
+<span class="tok-kw">if</span> errors.Is(err, ErrAuthMethod) {
+	<span class="tok-kw">return</span> err
+}</code></pre></div>
+</section>
+<section id="errors" aria-labelledby="errors-title">
+<h2 id="errors-title">Errors</h2>
+<p>Checks return errors defined by the application. Match individual failures from <code>gate.Join</code> with <code>errors.Is</code>.</p>
+</section>
+<nav class="pager" aria-label="Adjacent modules">
+<a href="../objex/index.html">← objex</a>
+<a href="../loom/index.html">loom →</a>
+</nav>
+</div>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>

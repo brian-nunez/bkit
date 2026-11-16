@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="General-purpose Go modules, each versioned, released, and installed on its own.">
+<title>bkit | General-purpose Go modules</title>
+<link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+<link rel="stylesheet" href="./assets/style.css">
+<script src="./assets/site.js">
+</script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="site-header">
+<div class="wrap header-inner">
+<a class="brand" href="./index.html">
+<img src="./assets/icon.svg" width="32" height="32" alt="">bkit</a>
+<nav class="module-nav" aria-label="Modules">
+<a href="./objex/index.html">objex</a>
+<a href="./gate/index.html">gate</a>
+<a href="./loom/index.html">loom</a>
+<a href="./settings/index.html">settings</a>
+<a href="./rdb/index.html">rdb</a>
+<a href="./stash/index.html">stash</a>
+</nav>
+<div class="header-actions">
+<a href="https://github.com/brian-nunez/bkit">GitHub ↗</a>
+<button class="theme-toggle" type="button" aria-pressed="false" hidden>Dark theme</button>
+</div>
+</div>
+</header>
+<main id="main" tabindex="-1">
+<div class="hero">
+<div class="wrap hero-grid">
+<div>
+<p class="eyebrow">github.com/brian-nunez/bkit</p>
+<div class="hero-brand">
+<img src="./assets/icon.svg" width="72" height="72" alt="">
+<h1>bkit</h1>
+</div>
+<p class="lead">General-purpose Go modules, each versioned, released, and installed on its own.</p>
+<p>Small, focused APIs with swappable drivers, so an application changes backends in one place. Every module uses the standard library first and reaches 100% test coverage.</p>
+<div class="actions">
+<a class="btn" href="#modules">Browse modules ↓</a>
+<a href="https://github.com/brian-nunez/bkit">View on GitHub ↗</a>
+</div>
+<p class="meta">Requires Go 1.26 or newer.</p>
+</div>
+<div>
+<div class="codebox hero-install">
+<div class="codebar">
+<span>Install a working stack / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install a working stack" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install a working stack"><code>go get github.com/brian-nunez/bkit/settings@latest
+go get github.com/brian-nunez/bkit/rdb@latest
+go get github.com/brian-nunez/bkit/rdb/drivers/sqlite@latest
+go get github.com/brian-nunez/bkit/stash/drivers/database@latest</code></pre><div class="hero-code-note">settings → rdb → stash/drivers/database</div></div>
+</div>
+</div>
+</div>
+<div class="wrap">
+<section class="content-section" id="why-bkit" aria-labelledby="why-bkit-title">
+<p class="section-label">01 / WHY BKIT</p>
+<h2 id="why-bkit-title">Why bkit</h2>
+<div class="principles">
+<article>
+<h3>Independent</h3>
+<p>Every module has its own <code>go.mod</code> and release tags, so an application imports only the pieces it uses and upgrades each one separately.</p>
+</article>
+<article>
+<h3>Swappable</h3>
+<p>Modules with backends define one API, and each backend is a driver module. Changing a database, store, or bucket backend means changing the one place the driver is constructed.</p>
+</article>
+<article>
+<h3>Light</h3>
+<p>Core modules use only the standard library. Third-party client libraries live in driver modules, so an application installs only the clients it needs.</p>
+</article>
+<article>
+<h3>Tested</h3>
+<p>Every module reaches 100% statement coverage from its own tests, with no external services. <code>objex</code> and <code>stash</code> drivers also run a shared conformance suite, so they behave the same for the same calls.</p>
+</article>
+<article>
+<h3>Released</h3>
+<p>Versions follow Semantic Versioning and are cut automatically from Conventional Commits, one module at a time.</p>
+</article>
+</div>
+</section>
+<section class="content-section" id="modules" aria-labelledby="modules-title">
+<p class="section-label">02 / MODULES</p>
+<h2 id="modules-title">Modules</h2>
+<p>Every module imports from <code>github.com/brian-nunez/bkit/&lt;module&gt;</code>. Drivers are nested modules, imported from <code>github.com/brian-nunez/bkit/&lt;module&gt;/drivers/&lt;driver&gt;</code>.</p>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">01</span>
+<h3>
+<a href="./objex/index.html">objex ↗</a>
+</h3>
+</div>
+<p>Backend-independent object storage API.</p>
+<div class="chips">
+<a href="./objex/index.html#driver-s3">drivers/s3</a>
+<a href="./objex/index.html#driver-filesystem">drivers/filesystem</a>
+<a href="./objex/index.html#driver-memory">drivers/memory</a>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install objex / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install objex" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install objex"><code>go get github.com/brian-nunez/bkit/objex</code></pre></div>
+</div>
+</article>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">02</span>
+<h3>
+<a href="./gate/index.html">gate ↗</a>
+</h3>
+</div>
+<p>Typed, composable boolean rules and checks.</p>
+<div class="chips">
+<span class="meta">Standard library only. No drivers.</span>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install gate / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install gate" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install gate"><code>go get github.com/brian-nunez/bkit/gate</code></pre></div>
+</div>
+</article>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">03</span>
+<h3>
+<a href="./loom/index.html">loom ↗</a>
+</h3>
+</div>
+<p>Graphs of typed Go functions, run in parallel on an elastic worker pool.</p>
+<div class="chips">
+<span class="meta">Standard library only. No drivers.</span>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install loom / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install loom" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install loom"><code>go get github.com/brian-nunez/bkit/loom</code></pre></div>
+</div>
+</article>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">04</span>
+<h3>
+<a href="./settings/index.html">settings ↗</a>
+</h3>
+</div>
+<p>Configuration loaded and merged from any number of sources.</p>
+<div class="chips">
+<a href="./settings/index.html#driver-yaml">drivers/yaml</a>
+<a href="./settings/index.html#driver-toml">drivers/toml</a>
+<a href="./settings/index.html#driver-vault">drivers/vault</a>
+<a href="./settings/index.html#driver-consul">drivers/consul</a>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install settings / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install settings" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install settings"><code>go get github.com/brian-nunez/bkit/settings</code></pre></div>
+</div>
+</article>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">05</span>
+<h3>
+<a href="./rdb/index.html">rdb ↗</a>
+</h3>
+</div>
+<p>One API over relational databases with pooling, placeholders, scanning, migrations, errors, and transactions.</p>
+<div class="chips">
+<a href="./rdb/index.html#driver-sqlite">drivers/sqlite</a>
+<a href="./rdb/index.html#driver-postgres">drivers/postgres</a>
+<a href="./rdb/index.html#driver-mysql">drivers/mysql</a>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install rdb / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install rdb" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install rdb"><code>go get github.com/brian-nunez/bkit/rdb</code></pre></div>
+</div>
+</article>
+<article class="module-row">
+<div>
+<div class="module-title">
+<span class="meta">06</span>
+<h3>
+<a href="./stash/index.html">stash ↗</a>
+</h3>
+</div>
+<p>One API over key-value stores, with expiry, atomic operations, and typed values.</p>
+<div class="chips">
+<a href="./stash/index.html#driver-memory">drivers/memory</a>
+<a href="./stash/index.html#driver-database">drivers/database</a>
+<a href="./stash/index.html#driver-redis">drivers/redis</a>
+<a href="./stash/index.html#driver-valkey">drivers/valkey</a>
+</div>
+</div>
+<div class="install-bar">
+<div class="codebox">
+<div class="codebar">
+<span>Install stash / shell</span>
+<button class="copy-btn" type="button" aria-label="Copy Install stash" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Install stash"><code>go get github.com/brian-nunez/bkit/stash</code></pre></div>
+</div>
+</article>
+</section>
+<section class="content-section" id="quick-start" aria-labelledby="quick-start-title">
+<p class="section-label">03 / QUICK START</p>
+<h2 id="quick-start-title">Quick start</h2>
+<p>Modules compose cleanly. Here configuration comes from the environment, the database URL picks the SQL driver, and the key-value store shares the database connection pool.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Compose modules / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Compose modules" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Compose modules"><code>cfg, err := settings.Load(ctx, settings.Env(settings.WithPrefix(<span class="tok-str">"APP_"</span>)))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+db, err := rdb.Open(ctx, cfg.GetString(<span class="tok-str">"database.url"</span>, <span class="tok-str">"sqlite:app.db"</span>),
+	sqlite.Driver(),
+	rdb.WithMaxOpenConns(10),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> db.Close()
+
+store, err := database.New(ctx, db)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}</code></pre></div>
+<p>The URL scheme picks one driver, and only that driver connects. Setting <code>APP_DATABASE__URL=postgres://...</code> switches the same binary to PostgreSQL once <code>postgres.Driver()</code> is passed to <code>rdb.Open</code>.</p>
+</section>
+<section class="content-section" id="usage" aria-labelledby="usage-title">
+<p class="section-label">04 / USAGE AT A GLANCE</p>
+<h2 id="usage-title">Usage at a glance</h2>
+<p>Each module page covers its full API. These examples show the shape of each module.</p>
+<details class="preview" open>
+<summary>objex</summary>
+<p>Construct a driver in one place and pass <code>objex.Bucket</code> everywhere else.</p>
+<div class="codebox">
+<div class="codebar">
+<span>objex example / go</span>
+<button class="copy-btn" type="button" aria-label="Copy objex example" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="objex example"><code>client, err := s3.New(ctx, s3.WithRegion(<span class="tok-str">"us-east-1"</span>))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+bucket := client.Bucket(<span class="tok-str">"assets"</span>)
+
+_, err = bucket.Put(ctx, <span class="tok-str">"avatars/42.png"</span>, r, objex.WithContentType(<span class="tok-str">"image/png"</span>))
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+obj, err := bucket.Get(ctx, <span class="tok-str">"avatars/42.png"</span>)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+<span class="tok-kw">defer</span> obj.Close()</code></pre></div>
+<p>
+<a href="./objex/index.html">Explore objex →</a>
+</p>
+</details>
+<details class="preview">
+<summary>gate</summary>
+<p>Any <code>func(T) bool</code> is a rule, and rules combine into larger ones.</p>
+<div class="codebox">
+<div class="codebar">
+<span>gate example / go</span>
+<button class="copy-btn" type="button" aria-label="Copy gate example" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="gate example"><code><span class="tok-kw">type</span> rule = gate.Rule[Access]
+
+<span class="tok-kw">func</span> hasRole(role <span class="tok-kw">string</span>) rule {
+	<span class="tok-kw">return</span> <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> slices.Contains(a.User.Roles, role) }
+}
+
+<span class="tok-kw">var</span> (
+	isOwner  rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> a.User.ID == a.Doc.OwnerID }
+	isBanned rule = <span class="tok-kw">func</span>(a Access) <span class="tok-kw">bool</span> { <span class="tok-kw">return</span> a.User.Banned }
+
+	canDelete = hasRole(<span class="tok-str">"admin"</span>).Or(hasRole(<span class="tok-str">"user"</span>).And(isOwner))
+	canEdit   = canDelete.And(gate.None(isBanned))
+)
+
+<span class="tok-kw">if</span> !canDelete(Access{User: user, Doc: doc}) {
+	<span class="tok-kw">return</span> ErrForbidden
+}</code></pre></div>
+<p>
+<a href="./gate/index.html">Explore gate →</a>
+</p>
+</details>
+<details class="preview">
+<summary>loom</summary>
+<p>Tasks are plain functions with typed values. Each starts as soon as its parents are done.</p>
+<div class="codebox">
+<div class="codebar">
+<span>Run a loom task graph / go</span>
+<button class="copy-btn" type="button" aria-label="Copy Run a loom task graph" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="Run a loom task graph"><code>g := loom.New(loom.WithRetry(loom.Backoff(3, time.Second, time.Minute)))
+users := loom.Add(g, <span class="tok-str">&quot;users&quot;</span>, fetchUsers)
+orders := loom.Add(g, <span class="tok-str">&quot;orders&quot;</span>, fetchOrders)
+report := loom.Add(g, <span class="tok-str">&quot;report&quot;</span>, <span class="tok-kw">func</span>(ctx context.Context, in *loom.Inputs) (Report, error) {
+	<span class="tok-kw">return</span> build(loom.Get(in, users), loom.Get(in, orders)), <span class="tok-kw">nil</span>
+}, loom.After(users, orders))
+
+res, err := g.Run(ctx)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+fmt.Println(loom.Get(res, report))</code></pre></div>
+<p>
+<a href="./loom/index.html">Explore loom →</a>
+</p>
+</details>
+<details class="preview">
+<summary>settings</summary>
+<p>Later sources override earlier ones, and maps merge key by key.</p>
+<div class="codebox">
+<div class="codebar">
+<span>settings example / go</span>
+<button class="copy-btn" type="button" aria-label="Copy settings example" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="settings example"><code>cfg, err := settings.Load(ctx,
+	settings.Map(map[<span class="tok-kw">string</span>]any{<span class="tok-str">"server"</span>: map[<span class="tok-kw">string</span>]any{<span class="tok-str">"addr"</span>: <span class="tok-str">":80"</span>}}),
+	settings.File(<span class="tok-str">"config.yaml"</span>, yaml.Format),
+	settings.Env(settings.WithPrefix(<span class="tok-str">"APP_"</span>)),
+)
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+addr := cfg.GetString(<span class="tok-str">"server.addr"</span>, <span class="tok-str">":8080"</span>)
+port, err := settings.Get[int](cfg, <span class="tok-str">"server.port"</span>)</code></pre></div>
+<p>
+<a href="./settings/index.html">Explore settings →</a>
+</p>
+</details>
+<details class="preview">
+<summary>rdb</summary>
+<p>Write <code>?</code> placeholders on every database, and scan rows into structs.</p>
+<div class="codebox">
+<div class="codebar">
+<span>rdb example / go</span>
+<button class="copy-btn" type="button" aria-label="Copy rdb example" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="rdb example"><code>db, err := rdb.Open(ctx, os.Getenv(<span class="tok-str">"DATABASE_URL"</span>), sqlite.Driver(), postgres.Driver())
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+user, err := rdb.One[User](ctx, db, <span class="tok-str">"SELECT id, email, created_at FROM users WHERE email = ?"</span>, email)
+<span class="tok-kw">if</span> errors.Is(err, rdb.ErrNotFound) {
+	<span class="tok-kw">return</span> ErrNoSuchUser
+}
+
+_, err = db.Exec(ctx, <span class="tok-str">"INSERT INTO users (email) VALUES (?)"</span>, email)
+<span class="tok-kw">if</span> errors.Is(err, rdb.ErrUniqueViolation) {
+	<span class="tok-kw">return</span> ErrEmailTaken
+}
+
+err = db.Tx(ctx, <span class="tok-kw">func</span>(tx *rdb.Tx) error {
+	_, err := tx.Exec(ctx, <span class="tok-str">"UPDATE accounts SET balance = balance - ? WHERE id = ?"</span>, amount, from)
+	<span class="tok-kw">return</span> err
+})</code></pre></div>
+<p>
+<a href="./rdb/index.html">Explore rdb →</a>
+</p>
+</details>
+<details class="preview">
+<summary>stash</summary>
+<p>Store typed values with expiry, and take locks that one caller wins.</p>
+<div class="codebox">
+<div class="codebar">
+<span>stash example / go</span>
+<button class="copy-btn" type="button" aria-label="Copy stash example" hidden>Copy</button>
+</div><pre tabindex="0" aria-label="stash example"><code>s, err := stash.Open(ctx, os.Getenv(<span class="tok-str">"STASH_URL"</span>), memory.Driver(), valkey.Driver())
+<span class="tok-kw">if</span> err != <span class="tok-kw">nil</span> {
+	<span class="tok-kw">return</span> err
+}
+
+sessions := stash.Typed[Session](s.Namespace(<span class="tok-str">"sessions"</span>), stash.JSON)
+err = sessions.Set(ctx, sessionID, Session{UserID: 42}, stash.WithTTL(24*time.Hour))
+
+err = s.Set(ctx, <span class="tok-str">"lock:job-7"</span>, []byte(owner), stash.IfNotExists(), stash.WithTTL(30*time.Second))
+<span class="tok-kw">if</span> errors.Is(err, stash.ErrExists) {
+	<span class="tok-kw">return</span> ErrBusy
+}</code></pre></div>
+<p>
+<a href="./stash/index.html">Explore stash →</a>
+</p>
+</details>
+</section>
+<section class="content-section" id="quality" aria-labelledby="quality-title">
+<p class="section-label">05 / VERSIONING AND QUALITY</p>
+<h2 id="quality-title">Versioning and quality</h2>
+<p>Every module follows Semantic Versioning with tags of the form <code>&lt;module&gt;/vX.Y.Z</code>, or <code>&lt;module&gt;/drivers/&lt;driver&gt;/vX.Y.Z</code> for a driver. Releases are cut automatically from Conventional Commits, and only modules with releasing commits get a new version. Every module reaches 100% statement coverage from its own tests without external services.</p>
+</section>
+</div>
+</main>
+<footer class="site-footer">
+<div class="wrap footer-inner">
+<p>bkit is licensed under the MIT License.<br>Copyright 2026 Brian Nunez.</p>
+<nav aria-label="Project">
+<a href="https://github.com/brian-nunez/bkit">GitHub</a>
+<a href="https://pkg.go.dev/github.com/brian-nunez/bkit">Go reference</a>
+<a href="https://github.com/brian-nunez/bkit/blob/main/CONTRIBUTING.md">Contributing</a>
+<a href="https://github.com/brian-nunez/bkit/tree/main/docs/adr">Decisions</a>
+</nav>
+</div>
+</footer>
+<div class="sr-only" role="status" aria-live="polite">
+</div>
+</body>
+</html>
