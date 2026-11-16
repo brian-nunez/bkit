@@ -80,6 +80,12 @@ nested modules, imported from `github.com/brian-nunez/bkit/<module>/drivers/<dri
 | --- | --- |
 | **[gate](gate)** | Typed, composable boolean rules and checks |
 
+### loom
+
+| Module | Purpose |
+| --- | --- |
+| **[loom](loom)** | Graphs of typed Go functions, run in parallel on an elastic worker pool |
+
 ### settings
 
 | Module | Purpose |
@@ -197,6 +203,26 @@ var (
 if !canDelete(Access{User: user, Doc: doc}) {
 	return ErrForbidden
 }
+```
+
+### loom
+
+Tasks are plain functions with typed values. Each starts as soon as its
+parents are done:
+
+```go
+g := loom.New(loom.WithRetry(loom.Backoff(3, time.Second, time.Minute)))
+users := loom.Add(g, "users", fetchUsers)
+orders := loom.Add(g, "orders", fetchOrders)
+report := loom.Add(g, "report", func(ctx context.Context, in *loom.Inputs) (Report, error) {
+	return build(loom.Get(in, users), loom.Get(in, orders)), nil
+}, loom.After(users, orders))
+
+res, err := g.Run(ctx)
+if err != nil {
+	return err
+}
+fmt.Println(loom.Get(res, report))
 ```
 
 ### settings
