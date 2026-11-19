@@ -21,6 +21,18 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Exactly one commit
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          count=$(git rev-list --count "$BASE..$HEAD")
+          if [ "$count" -ne 1 ]; then
+            git log --oneline "$BASE..$HEAD"
+            echo "::error::A pull request has exactly one commit; this one has $count. Squash them into one."
+            exit 1
+          fi
+
       - name: Commitlint
         uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
         with:
