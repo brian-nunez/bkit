@@ -10,12 +10,13 @@ REPOSITORY_ROOT := $(CURDIR)
 
 include make/development.mk
 
-.PHONY: build build-actions check check-components clean coverage-check format format-check get-all-release-packages help lint test tests unit vet
+.PHONY: build build-actions check check-components clean coverage-check format format-check get-all-release-packages help hooks lint test tests unit vet
 
 help:
 	@echo "bkit developer commands:"
 	@echo "  make doctor            Validate required local tool versions"
 	@echo "  make tools             Install the pinned local golangci-lint"
+	@echo "  make hooks             Check commit messages with commitlint on git commit"
 	@echo "  make format            Apply repository Go formatting"
 	@echo "  make format-check      Report formatting differences without changing files"
 	@echo "  make lint              Run the CI-equivalent Go linters for every module"
@@ -30,6 +31,9 @@ check: doctor check-components format-check lint vet tests coverage-check
 
 check-components:
 	@scripts/check-components.sh
+
+hooks:
+	git config core.hooksPath .githooks
 
 tests: build unit
 
