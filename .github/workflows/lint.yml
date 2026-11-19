@@ -69,6 +69,12 @@ jobs:
           args: -v --timeout=3m --config=${{ github.workspace }}/.golangci.yml
           working-directory: ${{ matrix.module }}
 
+      - name: Run govulncheck
+        working-directory: ${{ matrix.module }}
+        env:
+          GOWORK: "off"
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   # Single required status check that stays stable as modules are added.
   lint-result:
     if: always()

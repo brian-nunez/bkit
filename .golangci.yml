@@ -7,12 +7,231 @@ linters:
   default: standard
   enable:
     - bodyclose
+    - contextcheck
+    - depguard
+    - errname
     - errorlint
+    - exhaustive
+    - forcetypeassert
+    - gocritic
+    - gosec
     - misspell
     - nilerr
     - noctx
+    - nolintlint
+    - revive
     - unconvert
+    - wrapcheck
   settings:
+    depguard:
+      rules:
+        gate:
+          list-mode: strict
+          files:
+            - "**/bkit/gate/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/gate$
+        root:
+          list-mode: strict
+          files:
+            - "**/bkit/*.go"
+          allow:
+            - $gostd
+        loom/examples/ingest:
+          list-mode: strict
+          files:
+            - "**/bkit/loom/examples/ingest/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/loom$
+        loom:
+          list-mode: strict
+          files:
+            - "**/bkit/loom/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/loom$
+        objex/drivers/filesystem:
+          list-mode: strict
+          files:
+            - "**/bkit/objex/drivers/filesystem/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/objex$
+            - github.com/brian-nunez/bkit/objex/drivers/filesystem$
+            - github.com/brian-nunez/bkit/objex/objextest$
+        objex/drivers/memory:
+          list-mode: strict
+          files:
+            - "**/bkit/objex/drivers/memory/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/objex$
+            - github.com/brian-nunez/bkit/objex/drivers/memory$
+            - github.com/brian-nunez/bkit/objex/objextest$
+        objex/drivers/s3:
+          list-mode: strict
+          files:
+            - "**/bkit/objex/drivers/s3/*.go"
+          allow:
+            - $gostd
+            - github.com/aws/aws-sdk-go-v2/aws$
+            - github.com/aws/aws-sdk-go-v2/aws/signer/v4$
+            - github.com/aws/aws-sdk-go-v2/config$
+            - github.com/aws/aws-sdk-go-v2/credentials$
+            - github.com/aws/aws-sdk-go-v2/service/s3$
+            - github.com/aws/aws-sdk-go-v2/service/s3/types$
+            - github.com/aws/smithy-go$
+            - github.com/aws/smithy-go/transport/http$
+            - github.com/brian-nunez/bkit/objex$
+            - github.com/brian-nunez/bkit/objex/drivers/s3$
+            - github.com/brian-nunez/bkit/objex/objextest$
+        objex:
+          list-mode: strict
+          files:
+            - "**/bkit/objex/*.go"
+          allow:
+            - $gostd
+        objex/objextest:
+          list-mode: strict
+          files:
+            - "**/bkit/objex/objextest/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/objex$
+        rdb/drivers/mysql:
+          list-mode: strict
+          files:
+            - "**/bkit/rdb/drivers/mysql/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/rdb$
+            - github.com/go-sql-driver/mysql$
+        rdb/drivers/postgres:
+          list-mode: strict
+          files:
+            - "**/bkit/rdb/drivers/postgres/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/rdb$
+            - github.com/jackc/pgx/v5$
+            - github.com/jackc/pgx/v5/pgconn$
+            - github.com/jackc/pgx/v5/stdlib$
+        rdb/drivers/sqlite:
+          list-mode: strict
+          files:
+            - "**/bkit/rdb/drivers/sqlite/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/rdb$
+            - modernc.org/sqlite$
+            - modernc.org/sqlite/lib$
+        rdb:
+          list-mode: strict
+          files:
+            - "**/bkit/rdb/*.go"
+          allow:
+            - $gostd
+        rdb/rdbtest:
+          list-mode: strict
+          files:
+            - "**/bkit/rdb/rdbtest/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/rdb$
+        settings/drivers/consul:
+          list-mode: strict
+          files:
+            - "**/bkit/settings/drivers/consul/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/settings$
+            - github.com/brian-nunez/bkit/settings/drivers/consul$
+        settings/drivers/toml:
+          list-mode: strict
+          files:
+            - "**/bkit/settings/drivers/toml/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/settings/drivers/toml$
+            - github.com/pelletier/go-toml/v2$
+        settings/drivers/vault:
+          list-mode: strict
+          files:
+            - "**/bkit/settings/drivers/vault/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/settings$
+            - github.com/brian-nunez/bkit/settings/drivers/vault$
+        settings/drivers/yaml:
+          list-mode: strict
+          files:
+            - "**/bkit/settings/drivers/yaml/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/settings/drivers/yaml$
+            - go.yaml.in/yaml/v3$
+        settings:
+          list-mode: strict
+          files:
+            - "**/bkit/settings/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/settings$
+        stash/drivers/database:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/drivers/database/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/rdb$
+            - github.com/brian-nunez/bkit/rdb/drivers/mysql$
+            - github.com/brian-nunez/bkit/rdb/drivers/postgres$
+            - github.com/brian-nunez/bkit/rdb/drivers/sqlite$
+            - github.com/brian-nunez/bkit/stash$
+            - github.com/brian-nunez/bkit/stash/stashtest$
+        stash/drivers/memory:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/drivers/memory/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/stash$
+            - github.com/brian-nunez/bkit/stash/stashtest$
+        stash/drivers/redis:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/drivers/redis/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/stash$
+            - github.com/brian-nunez/bkit/stash/stashtest$
+            - github.com/redis/go-redis/v9$
+        stash/drivers/valkey:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/drivers/valkey/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/stash$
+            - github.com/brian-nunez/bkit/stash/stashtest$
+            - github.com/valkey-io/valkey-go$
+        stash:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/stash$
+            - github.com/brian-nunez/bkit/stash/stashtest$
+        stash/stashtest:
+          list-mode: strict
+          files:
+            - "**/bkit/stash/stashtest/*.go"
+          allow:
+            - $gostd
+            - github.com/brian-nunez/bkit/stash$
     staticcheck:
       # "all" adds the stylecheck rules staticcheck disables by default,
       # including ST1000 (package comment) and ST1020-ST1022 (godoc form).
