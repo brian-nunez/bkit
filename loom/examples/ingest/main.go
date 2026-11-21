@@ -19,6 +19,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -197,7 +198,14 @@ func handle(ctx context.Context, job Job, pool *loom.Pool, log *slog.Logger) {
 
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	if err := run(log); err != nil {
+		log.Error("pool", "err", err)
+		os.Exit(1)
+	}
+}
 
+// run serves jobs until the queue is empty or the process is interrupted.
+func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -213,8 +221,7 @@ func main() {
 		OnTaskFinish: func(context.Context, loom.TaskEvent) { finished.Add(1) },
 	}))
 	if err != nil {
-		log.Error("pool", "err", err)
-		os.Exit(1)
+		return err
 	}
 
 	jobs := make(chan Job)
@@ -222,7 +229,7 @@ func main() {
 	go func() {
 		defer close(jobs)
 		for i := 1; i <= 12; i++ {
-			job := Job{ID: fmt.Sprintf("job-%d", i), PlaylistURL: "https://cdn.example/" + fmt.Sprint(i)}
+			job := Job{ID: fmt.Sprintf("job-%d", i), PlaylistURL: "https://cdn.example/" + strconv.Itoa(i)}
 			if i == 5 {
 				job.PlaylistURL = "" // bad input: fails without retries
 			}
@@ -286,4 +293,5 @@ func main() {
 		log.Warn("shutdown", "err", err)
 	}
 	log.Info("done", "tasks finished", finished.Load())
+	return nil
 }

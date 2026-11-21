@@ -248,8 +248,9 @@ func toBool(v reflect.Value) (bool, bool) {
 	case reflect.String:
 		b, err := strconv.ParseBool(v.String())
 		return b, err == nil
+	default:
+		return false, false
 	}
-	return false, false
 }
 
 func toString(v reflect.Value) (string, bool) {
@@ -264,8 +265,9 @@ func toString(v reflect.Value) (string, bool) {
 		return strconv.FormatUint(v.Uint(), 10), true
 	case reflect.Float32, reflect.Float64:
 		return strconv.FormatFloat(v.Float(), 'g', -1, 64), true
+	default:
+		return "", false
 	}
-	return "", false
 }
 
 func toInt(v reflect.Value) (int64, bool) {
@@ -274,22 +276,29 @@ func toInt(v reflect.Value) (int64, bool) {
 		return v.Int(), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		u := v.Uint()
-		return int64(u), u <= math.MaxInt64
+		if u > math.MaxInt64 {
+			return 0, false
+		}
+		return int64(u), true
 	case reflect.Float32, reflect.Float64:
 		f := v.Float()
 		return int64(f), f == math.Trunc(f) && f >= math.MinInt64 && f < math.MaxInt64
 	case reflect.String:
 		i, err := strconv.ParseInt(v.String(), 10, 64)
 		return i, err == nil
+	default:
+		return 0, false
 	}
-	return 0, false
 }
 
 func toUint(v reflect.Value) (uint64, bool) {
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		i := v.Int()
-		return uint64(i), i >= 0
+		if i < 0 {
+			return 0, false
+		}
+		return uint64(i), true
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
 		return v.Uint(), true
 	case reflect.Float32, reflect.Float64:
@@ -298,8 +307,9 @@ func toUint(v reflect.Value) (uint64, bool) {
 	case reflect.String:
 		u, err := strconv.ParseUint(v.String(), 10, 64)
 		return u, err == nil
+	default:
+		return 0, false
 	}
-	return 0, false
 }
 
 func toFloat(v reflect.Value) (float64, bool) {
@@ -313,6 +323,7 @@ func toFloat(v reflect.Value) (float64, bool) {
 	case reflect.String:
 		f, err := strconv.ParseFloat(v.String(), 64)
 		return f, err == nil
+	default:
+		return 0, false
 	}
-	return 0, false
 }

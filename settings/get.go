@@ -33,8 +33,9 @@ func nilable(k reflect.Kind) bool {
 	switch k {
 	case reflect.Pointer, reflect.Map, reflect.Slice, reflect.Interface:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 // getOr returns Get's value, or def when Get fails.

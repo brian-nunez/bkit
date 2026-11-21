@@ -7,11 +7,29 @@ linters:
   default: standard
   enable:
     - bodyclose
+    - contextcheck
+    - copyloopvar
+    - depguard
     - errorlint
+    - exhaustive
+    - forbidigo
+    - gocritic
+    - gosec
+    - intrange
     - misspell
     - nilerr
+    - nilnil
     - noctx
+    - nolintlint
+    - perfsprint
+    - revive
+    - rowserrcheck
+    - sqlclosecheck
+    - thelper
     - unconvert
+    - unparam
+    - usestdlibvars
+    - whitespace
   settings:
     staticcheck:
       # "all" adds the stylecheck rules staticcheck disables by default,
@@ -20,6 +38,86 @@ linters:
         - all
     misspell:
       locale: US
+    depguard:
+      rules:
+        no-unsafe:
+          deny:
+            - pkg: unsafe
+              desc: unsafe is forbidden in every bkit module
+        # Library code: everything except tests, examples, and the driver
+        # conformance suites other modules run from their tests.
+        library:
+          files:
+            - "!$test"
+            - "!**/examples/**"
+            - "!**/objex/objextest/**"
+            - "!**/rdb/rdbtest/**"
+            - "!**/stash/stashtest/**"
+          deny:
+            - pkg: os/exec
+              desc: bkit modules never start processes
+            - pkg: flag
+              desc: flags belong to the application, never to a library
+            - pkg: log
+              desc: bkit modules never log; report events or errors to the caller
+            - pkg: log/slog
+              desc: bkit modules never log; report events or errors to the caller
+            - pkg: math/rand
+              desc: use crypto/rand, or take randomness from the caller
+            - pkg: math/rand/v2
+              desc: use crypto/rand, or take randomness from the caller
+            - pkg: testing
+              desc: testing belongs in _test.go files and the conformance suites
+    exhaustive:
+      default-signifies-exhaustive: true
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: '^http\.(DefaultClient|Get|Post|PostForm|Head)$'
+          msg: use an explicit *http.Client with a timeout instead of the net/http default client
+        - pattern: '^time\.Sleep$'
+          msg: use a context-aware timer (select on ctx.Done() and time.NewTimer) instead of time.Sleep
+        - pattern: '^(fmt\.Print(f|ln)?|print|println)$'
+          msg: bkit modules never write to stdout; return values or errors to the caller
+    nilnil:
+      # A nil map or slice is a valid empty value, not a missing one.
+      checked-types:
+        - chan
+        - func
+        - iface
+        - ptr
+        - uintptr
+        - unsafeptr
+    nolintlint:
+      allow-unused: false
+      require-explanation: true
+      require-specific: true
+    revive:
+      rules:
+        # Defaults, minus two that conflict with bkit's API design:
+        # functional options return unexported types on purpose, and
+        # interface implementations keep their parameter names for godoc.
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: exported
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+        - name: var-naming
   exclusions:
     generated: lax
     presets:
@@ -27,10 +125,64 @@ linters:
     paths:
       - vendor
       - node_modules
+    rules:
+      # Tests and conformance suites wait for real expiry, serve presigned
+      # URLs over httptest, and write fixtures with test-only permissions.
+      - path: '(_test\.go$|/objextest/|/rdbtest/|/stashtest/)'
+        linters:
+          - forbidigo
+          - gosec
+          - noctx
+      # Tests start their own root contexts, stub interfaces with zero
+      # values, close rows early to exercise error paths, and assert that an
+      # error comes back as the identical value, unwrapped.
+      - path: '_test\.go$'
+        linters:
+          - contextcheck
+          - nilnil
+          - rowserrcheck
+          - sqlclosecheck
+      - path: '_test\.go$'
+        linters:
+          - errorlint
+        text: 'comparing with [!=]= will fail on wrapped errors'
+      # Conformance suite cases are subtest bodies, called from t.Run
+      # closures, so failures report the case's own line.
+      - path: '/(objextest|rdbtest|stashtest)/'
+        linters:
+          - thelper
+      # The field name is the test: it collides with CreatedAt once
+      # underscores are ignored.
+      - path: 'rdb/scan_test\.go$'
+        linters:
+          - revive
+          - staticcheck
+        text: 'Created_At'
+      # S3-compatible ETags are the MD5 of the content; MD5 is not used for
+      # security here.
+      - path: 'objex/drivers/memory/memory\.go$'
+        linters:
+          - gosec
+        text: 'G(401|501):'
+      # A Pool's workers live as long as the Pool, not any one caller, so
+      # NewPool takes no context (ADR 0004). isolate runs a closure that
+      # already holds the task's context.
+      - path: 'loom/run\.go$'
+        linters:
+          - contextcheck
+        text: '(Function `NewPool->spawn->loop` should pass the context parameter|Non-inherited new context)'
+      # Examples are runnable programs: they print, log, and pick random
+      # inputs, which library code never does.
+      - path: '/examples/'
+        linters:
+          - contextcheck
+          - forbidigo
+          - gosec
 
 formatters:
   enable:
     - gofmt
+    - gofumpt
     - goimports
   settings:
     gofmt:
@@ -43,3 +195,7 @@ formatters:
     paths:
       - vendor
       - node_modules
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

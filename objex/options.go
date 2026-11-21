@@ -167,12 +167,12 @@ func normalizeMetadata(m map[string]string) (map[string]string, error) {
 		if key == "" {
 			return nil, invalidOption("metadata keys must not be empty")
 		}
-		for i := 0; i < len(key); i++ {
+		for i := range len(key) {
 			if c := key[i]; !isMetadataKeyChar(c) {
 				return nil, invalidOption(fmt.Sprintf("metadata key %q may contain only letters, digits, and hyphens", key))
 			}
 		}
-		for i := 0; i < len(value); i++ {
+		for i := range len(value) {
 			if value[i] < 0x20 || value[i] > 0x7e {
 				return nil, invalidOption(fmt.Sprintf("metadata value for %q must be printable ASCII", key))
 			}

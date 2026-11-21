@@ -359,7 +359,7 @@ func TestExecAndQueryErrors(t *testing.T) {
 	// An *Error from below passes through unchanged.
 	inner := &Error{Op: "custom", Kind: ErrCheckViolation}
 	d.db.exec = func(string, []driver.NamedValue) (driver.Result, error) { return nil, inner }
-	if _, err := db.Exec(ctx, "INSERT"); err != inner { //nolint:errorlint // the same value, unwrapped
+	if _, err := db.Exec(ctx, "INSERT"); err != inner { // the same value, unwrapped
 		t.Errorf("Exec err = %v, want the inner *Error", err)
 	}
 
@@ -427,7 +427,7 @@ func TestTxRollback(t *testing.T) {
 	ctx := context.Background()
 	fnErr := errors.New("fn failed")
 
-	if err := db.Tx(ctx, func(*Tx) error { return fnErr }); err != fnErr { //nolint:errorlint // fn's error, unwrapped
+	if err := db.Tx(ctx, func(*Tx) error { return fnErr }); err != fnErr { // fn's error, unwrapped
 		t.Fatalf("err = %v, want fn's error", err)
 	}
 	if d.db.rollbacks != 1 || d.db.commits != 0 {

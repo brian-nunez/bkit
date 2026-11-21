@@ -14,9 +14,9 @@ import (
 	"github.com/brian-nunez/bkit/rdb"
 )
 
-func open(t *testing.T, rawURL string, opts ...rdb.Option) *rdb.DB {
+func open(t *testing.T, rawURL string) *rdb.DB {
 	t.Helper()
-	db, err := rdb.Open(context.Background(), rawURL, append([]rdb.Option{Driver()}, opts...)...)
+	db, err := rdb.Open(context.Background(), rawURL, Driver())
 	if err != nil {
 		t.Fatalf("Open(%q): %v", rawURL, err)
 	}

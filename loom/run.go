@@ -64,7 +64,7 @@ func (g *Graph) Run(ctx context.Context, opts ...RunOption) (*Result, error) {
 	}
 	if pool == nil {
 		pool, _ = NewPool()
-		defer stopPrivate(pool)
+		defer stopPrivate(ctx, pool)
 	}
 
 	runCtx, cancel := context.WithCancelCause(ctx)
@@ -90,9 +90,10 @@ func (g *Graph) Run(ctx context.Context, opts ...RunOption) (*Result, error) {
 }
 
 // stopPrivate shuts a run's private pool down without waiting for tasks
-// that ignore their context.
-func stopPrivate(p *Pool) {
-	ctx, cancel := context.WithCancel(context.Background())
+// that ignore their context. The context passed to Shutdown is already
+// canceled, so Shutdown does not wait, whatever ctx's state.
+func stopPrivate(ctx context.Context, p *Pool) {
+	ctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	cancel()
 	_ = p.Shutdown(ctx)
 }

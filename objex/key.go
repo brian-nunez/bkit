@@ -58,7 +58,7 @@ func ValidateBucketName(name string) error {
 		return invalidBucketName("bucket names are 3 to 63 characters")
 	}
 
-	for i := 0; i < len(name); i++ {
+	for i := range len(name) {
 		c := name[i]
 		isAlphanumeric := (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
 		if !isAlphanumeric && c != '-' && c != '.' {
@@ -92,7 +92,7 @@ func looksLikeIPv4(name string) bool {
 		if part == "" || len(part) > 3 {
 			return false
 		}
-		for i := 0; i < len(part); i++ {
+		for i := range len(part) {
 			if part[i] < '0' || part[i] > '9' {
 				return false
 			}

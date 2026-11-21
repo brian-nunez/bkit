@@ -64,7 +64,9 @@ its own step:
 | `deadcode` | `deadcode -test` finds a function no test or caller reaches |
 | `vuln` | govulncheck finds a known vulnerability in code the module calls |
 
-The root `make check` also runs `tidy-check` for the root module and every
+The root `make check` also runs `make test-scripts` (the tests for the
+scripts in `scripts/`), `make no-bypass` (no `//nolint`, `//lint:ignore`, or
+`#nosec` in any Go file), and `tidy-check` for the root module and every
 example, and `make examples` builds, vets, and race-tests the example
 modules. After the checks, CI runs `scripts/check-clean-tree.sh`, which
 fails when a check changed a tracked file or left an untracked one.
