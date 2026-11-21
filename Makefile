@@ -5,6 +5,11 @@ COMPONENTS = objex objex/drivers/memory objex/drivers/filesystem objex/drivers/s
 
 REPOSITORY_ROOT := $(CURDIR)
 
+# Time each fuzz target runs in test-fuzz, and the modules test-mutation
+# mutates. Both run nightly in .github/workflows/nightly.yml.
+FUZZTIME ?= 10s
+MUTATION_MODULES ?= gate loom objex rdb settings stash
+
 # EXAMPLES lists the unreleased example modules. They stay out of COMPONENTS
 # and may use a replace directive, but they build, vet, lint, and test like
 # every other module.
@@ -15,7 +20,7 @@ EXAMPLES = $(patsubst ./%/go.mod,%,$(shell find . -path '*/examples/*' -name go.
 
 include make/development.mk
 
-.PHONY: build build-actions check check-components clean coverage-check deadcode examples format format-check api-check get-all-release-packages guardrail-check help lint no-bypass test test-scripts tests tidy-check unit vet vuln
+.PHONY: build build-actions check check-components clean coverage-check deadcode examples format format-check api-check get-all-release-packages guardrail-check help lint no-bypass test test-fuzz test-integration test-mutation test-scripts tests tidy-check unit vet vuln
 
 help:
 	@echo "bkit developer commands:"
@@ -36,6 +41,9 @@ help:
 	@echo "  make no-bypass         Fail on //nolint, //lint:ignore, or #nosec in any Go file"
 	@echo "  make guardrail-check   Audit this branch for guardrail changes and bypasses"
 	@echo "  make api-check         Fail on unmarked incompatible API changes in committed work"
+	@echo "  make test-fuzz         Actively fuzz every fuzz target for FUZZTIME (default 10s)"
+	@echo "  make test-integration  Run driver integration tests against Docker services"
+	@echo "  make test-mutation     Report mutation-test efficacy for MUTATION_MODULES"
 	@echo "  make check             Run the complete local pre-PR validation"
 	@echo "  make clean             Remove generated build and test artifacts"
 
@@ -51,6 +59,22 @@ test-scripts: check-go
 
 # Exits 1 when the branch changes a guardrail; set GUARDRAIL_APPROVED=true
 # after review. CI runs the same script in guardrails.yml.
+test-fuzz: check-go
+	@FUZZTIME=$(FUZZTIME) scripts/fuzz.sh
+
+test-integration: check-go
+	@scripts/integration.sh
+
+# Report-only until a baseline efficacy is known; then add
+# --threshold-efficacy to fail below it. -count=1 keeps the coverage run out
+# of the test cache, because gremlins scales each mutant's timeout from it.
+test-mutation: check-go
+	@set -e; \
+	for dir in $(MUTATION_MODULES); do \
+		echo "Mutation testing $$dir..."; \
+		(cd "$$dir" && GOFLAGS=-count=1 $(TOOLS) gremlins unleash --timeout-coefficient 20 --exclude-files "(vendor|objextest|rdbtest|stashtest)/" .); \
+	done
+
 no-bypass:
 	@scripts/check-no-bypass.sh
 

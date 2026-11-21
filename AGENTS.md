@@ -81,8 +81,9 @@ and every component, builds, vets, and tests the example modules, and ends
 with `api-check`. CI runs the same targets and fails when a check leaves the
 working tree dirty. For one module: `make -C <module> check`; after
 `make -C <module> tests`, `make -C <module> coverage-check` lists any
-function below 100%. Release flow, recovery, and CI details live in
-`docs/development-and-release.md`.
+function below 100%. `make test-fuzz`, `make test-integration` (Docker), and
+`make test-mutation` run the slower checks that `nightly.yml` runs. Release
+flow, recovery, and CI details live in `docs/development-and-release.md`.
 
 ## Commits
 

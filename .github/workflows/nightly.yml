@@ -1,0 +1,140 @@
+name: Nightly verification
+
+# Checks too slow for every pull request: active fuzzing, mutation testing,
+# driver integration tests against real services, and a vulnerability scan
+# that catches advisories published after the last change.
+
+on:
+  schedule:
+    - cron: "23 7 * * *"
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: Time per fuzz target
+        default: 60s
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  versions:
+    runs-on: ubuntu-latest
+    outputs:
+      go-version: ${{ steps.versions.outputs.go-version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Read pinned Go version
+        id: versions
+        run: echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
+
+  # Integration tests also run on every push to main, before a release
+  # reaches consumers.
+  integration:
+    name: Integration tests
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.versions.outputs.go-version }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Run integration tests
+        run: make --no-print-directory test-integration
+
+  fuzz:
+    name: Active fuzzing
+    if: github.event_name != 'push'
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.versions.outputs.go-version }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Fuzz every target
+        env:
+          FUZZTIME: ${{ inputs.fuzztime || '60s' }}
+        run: make --no-print-directory test-fuzz FUZZTIME="$FUZZTIME"
+
+      - name: Upload failing inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-failures
+          path: "**/testdata/fuzz/**"
+          if-no-files-found: ignore
+
+  mutation:
+    name: Mutation testing
+    if: github.event_name != 'push'
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.versions.outputs.go-version }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Cache pinned tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-nightly-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/tools.sh', 'make/development.mk') }}
+
+      - name: Report mutation efficacy
+        run: make --no-print-directory test-mutation
+
+  vuln:
+    name: Vulnerability scan
+    if: github.event_name != 'push'
+    needs: versions
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.versions.outputs.go-version }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Cache pinned tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/tools.sh', 'make/development.mk') }}
+
+      - name: Scan every module
+        run: make --no-print-directory vuln
