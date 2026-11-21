@@ -1,2 +1,18 @@
 # Default owner for everything.
-*       @brian-nunez
+*                     @brian-nunez
+
+# Deterministic guardrails need explicit maintainer review. Keep this list in
+# step with is_guardrail_file in scripts/guardrail-check.sh.
+/.golangci.yml        @brian-nunez
+/.commitlintrc.json   @brian-nunez
+/.gitignore           @brian-nunez
+/AGENTS.md            @brian-nunez
+/Makefile             @brian-nunez
+Makefile              @brian-nunez
+/make/                @brian-nunez
+/scripts/             @brian-nunez
+/.github/             @brian-nunez
+/.agents/             @brian-nunez
+/objex/objextest/     @brian-nunez
+/rdb/rdbtest/         @brian-nunez
+/stash/stashtest/     @brian-nunez

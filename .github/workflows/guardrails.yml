@@ -1,0 +1,100 @@
+name: Guardrail audit
+
+# Raises an alarm when a pull request changes a deterministic guardrail
+# (linter config, Makefiles, scripts, workflows, CODEOWNERS, AGENTS.md, agent
+# skills, driver conformance suites) or adds a lint or test bypass (//nolint,
+# //lint:ignore, #nosec, //go:build, t.Skip). The check fails until the pull
+# request carries the guardrail-approved label. scripts/guardrail-check.sh
+# holds the rules; see docs/adr/0005-enforce-guardrails-deterministically.md.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: guardrails-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  audit:
+    name: Guardrail audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      # The base branch's copy of the script audits the change, so a pull
+      # request cannot weaken the audit that judges it.
+      - name: Check guardrail changes
+        id: check
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          script=$(mktemp)
+          if git cat-file -e "$BASE_SHA:scripts/guardrail-check.sh" 2>/dev/null; then
+            git show "$BASE_SHA:scripts/guardrail-check.sh" > "$script"
+          else
+            cp scripts/guardrail-check.sh "$script"
+          fi
+
+          set +e
+          report=$(GUARDRAIL_APPROVED=false bash "$script" --base "$BASE_SHA" --head "$HEAD_SHA" --markdown)
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then
+            echo "$report"
+            echo "::error::guardrail-check.sh failed with exit code $status."
+            exit "$status"
+          fi
+
+          echo "triggered=$([ "$status" -eq 1 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          {
+            echo "report<<GUARDRAIL_EOF"
+            echo "$report"
+            echo "GUARDRAIL_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "$report"
+
+      - name: Post or update the alarm comment
+        if: steps.check.outputs.triggered == 'true'
+        # Pull requests from forks get a read-only token; the label check
+        # below still fails them.
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          REPORT: ${{ steps.check.outputs.report }}
+        with:
+          script: |
+            const marker = '<!-- guardrail-alarm -->';
+            const body = process.env.REPORT;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+            });
+            const existing = comments.find(c => c.user?.type === 'Bot' && c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Require the guardrail-approved label
+        if: steps.check.outputs.triggered == 'true' && !contains(github.event.pull_request.labels.*.name, 'guardrail-approved')
+        run: |
+          echo "::error::This pull request changes a guardrail or adds a bypass. Review the alarm comment, then add the guardrail-approved label."
+          exit 1
