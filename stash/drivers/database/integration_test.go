@@ -42,6 +42,7 @@ func TestIntegration(t *testing.T) {
 			t.Cleanup(func() { _ = db.Close() })
 			stashtest.Run(t, stashtest.Config{
 				NewBackend: func(t *testing.T) stash.Backend {
+					t.Helper()
 					table := fmt.Sprintf("stash_test_%d_%d", os.Getpid(), tableSeq.Add(1))
 					b, err := open(ctx, db, WithTable(table))
 					if err != nil {

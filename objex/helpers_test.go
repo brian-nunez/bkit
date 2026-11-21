@@ -114,8 +114,12 @@ func TestMove(t *testing.T) {
 
 func TestFilterList(t *testing.T) {
 	entries := []ObjectInfo{
-		{Key: "c.txt"}, {Key: "b/2.txt"}, {Key: "a.txt"}, {Key: "b/1.txt"},
-		{Key: "b/c/3.txt"}, {Key: "b-sibling.txt"},
+		{Key: "c.txt"},
+		{Key: "b/2.txt"},
+		{Key: "a.txt"},
+		{Key: "b/1.txt"},
+		{Key: "b/c/3.txt"},
+		{Key: "b-sibling.txt"},
 	}
 	keys := func(infos []ObjectInfo) []string {
 		out := make([]string, 0, len(infos))

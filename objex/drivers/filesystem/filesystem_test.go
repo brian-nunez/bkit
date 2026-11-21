@@ -44,7 +44,10 @@ func newBucket(t *testing.T, opts ...filesystem.Option) *filesystem.Bucket {
 
 func TestConformance(t *testing.T) {
 	objextest.Run(t, objextest.Config{
-		NewBucket: func(t *testing.T) objex.Bucket { return newBucket(t) },
+		NewBucket: func(t *testing.T) objex.Bucket {
+			t.Helper()
+			return newBucket(t)
+		},
 	})
 }
 
@@ -63,6 +66,7 @@ func TestManagerConformance(t *testing.T) {
 func TestPresignerConformance(t *testing.T) {
 	objextest.RunPresigner(t, objextest.PresignerConfig{
 		NewBucket: func(t *testing.T) objex.Bucket {
+			t.Helper()
 			_, b, _ := presignServer(t)
 			return b
 		},
@@ -371,11 +375,11 @@ func TestPresignedURLShape(t *testing.T) {
 
 // presignServer starts a test server for a client configured for presigning
 // and returns the client, its bucket, and the server.
-func presignServer(t *testing.T, opts ...filesystem.Option) (*filesystem.Client, *filesystem.Bucket, *httptest.Server) {
+func presignServer(t *testing.T) (*filesystem.Client, *filesystem.Bucket, *httptest.Server) {
 	t.Helper()
 	server := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(server.Close)
-	client, _ := newClient(t, append([]filesystem.Option{filesystem.WithPresign(server.URL+"/files", signingKey)}, opts...)...)
+	client, _ := newClient(t, filesystem.WithPresign(server.URL+"/files", signingKey))
 	server.Config.Handler = client.Handler()
 	if err := client.CreateBucket(context.Background(), "objextest"); err != nil {
 		t.Fatal(err)

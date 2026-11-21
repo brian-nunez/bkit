@@ -71,8 +71,10 @@ func TestConfigURL(t *testing.T) {
 		{Config{Host: "fe80::1%eth0"}, "postgres://[fe80::1%25eth0]/"},
 		{Config{Host: "127.0.0.1"}, "postgres://127.0.0.1/"},
 		{Config{Host: "db", User: "app", Password: "p@ss/word"}, "postgres://app:p%40ss%2Fword@db/"},
-		{Config{Host: "db", SSLMode: "require", Params: map[string]string{"application_name": "api", "search_path": "app"}},
-			"postgres://db/?application_name=api&search_path=app&sslmode=require"},
+		{
+			Config{Host: "db", SSLMode: "require", Params: map[string]string{"application_name": "api", "search_path": "app"}},
+			"postgres://db/?application_name=api&search_path=app&sslmode=require",
+		},
 	}
 	for _, tt := range tests {
 		if got := tt.cfg.url(); got != tt.want {

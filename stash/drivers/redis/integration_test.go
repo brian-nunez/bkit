@@ -29,6 +29,7 @@ func TestIntegration(t *testing.T) {
 	}
 	stashtest.Run(t, stashtest.Config{
 		NewBackend: func(t *testing.T) stash.Backend {
+			t.Helper()
 			u, err := url.Parse(raw)
 			if err != nil {
 				t.Fatal(err)

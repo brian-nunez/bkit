@@ -28,10 +28,10 @@ func openSQLite(t *testing.T, path string) *rdb.DB {
 }
 
 // newBackend returns a backend over a fresh SQLite database.
-func newBackend(t *testing.T, path string, opts ...Option) (*backend, *rdb.DB) {
+func newBackend(t *testing.T, path string) (*backend, *rdb.DB) {
 	t.Helper()
 	db := openSQLite(t, path)
-	b, err := open(context.Background(), db, opts...)
+	b, err := open(context.Background(), db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,12 +41,17 @@ func newBackend(t *testing.T, path string, opts ...Option) (*backend, *rdb.DB) {
 func TestConformance(t *testing.T) {
 	t.Run("memory", func(t *testing.T) {
 		stashtest.Run(t, stashtest.Config{
-			NewBackend: func(t *testing.T) stash.Backend { b, _ := newBackend(t, ""); return b },
+			NewBackend: func(t *testing.T) stash.Backend {
+				t.Helper()
+				b, _ := newBackend(t, "")
+				return b
+			},
 		})
 	})
 	t.Run("file", func(t *testing.T) {
 		stashtest.Run(t, stashtest.Config{
 			NewBackend: func(t *testing.T) stash.Backend {
+				t.Helper()
 				b, _ := newBackend(t, filepath.Join(t.TempDir(), "stash.db"))
 				return b
 			},
@@ -215,7 +220,7 @@ func TestIncrConflicts(t *testing.T) {
 	ctx := context.Background()
 	b, db := newBackend(t, "")
 	conflict := &rdb.Error{Op: "commit", Kind: rdb.ErrRetryable}
-	real := b.tx
+	realTx := b.tx
 
 	fails := 3
 	b.tx = func(ctx context.Context, fn func(*rdb.Tx) error) error {
@@ -223,7 +228,7 @@ func TestIncrConflicts(t *testing.T) {
 			fails--
 			return conflict
 		}
-		return real(ctx, fn)
+		return realTx(ctx, fn)
 	}
 	if n, err := b.Incr(ctx, "n", 2); err != nil || n != 2 {
 		t.Fatalf("Incr after conflicts = %d, %v", n, err)
@@ -258,7 +263,7 @@ func TestIncrConflicts(t *testing.T) {
 	}
 
 	// A row that cannot be scanned.
-	b.tx = real
+	b.tx = realTx
 	if _, err := db.Exec(ctx, "INSERT INTO stash (k, v, expires_at) VALUES ('bad', x'31', 'soon')"); err != nil {
 		t.Fatal(err)
 	}

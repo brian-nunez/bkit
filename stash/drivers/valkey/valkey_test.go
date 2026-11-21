@@ -26,8 +26,11 @@ func openBackend(t *testing.T, srv *fakeServer) *backend {
 
 func TestConformance(t *testing.T) {
 	stashtest.Run(t, stashtest.Config{
-		NewBackend: func(t *testing.T) stash.Backend { return openBackend(t, startServer(t)) },
-		TTL:        50 * time.Millisecond,
+		NewBackend: func(t *testing.T) stash.Backend {
+			t.Helper()
+			return openBackend(t, startServer(t))
+		},
+		TTL: 50 * time.Millisecond,
 	})
 }
 

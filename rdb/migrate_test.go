@@ -243,7 +243,7 @@ func TestMigrationStatusErrors(t *testing.T) {
 }
 
 func TestMigrateHistoryChecks(t *testing.T) {
-	sum := func(src string) string { return checksum(src) }
+	sum := checksum
 	three := fstest.MapFS{
 		"1_a.sql": file("SELECT 1"),
 		"2_b.sql": file("SELECT 2"),

@@ -18,7 +18,8 @@ templates, root registration, and validation steps.
   safer or simpler, not by default.
 - **Standard library first.** A new direct dependency needs Brian's approval;
   heavy third-party dependencies belong in driver modules so the parent
-  stays dependency-light.
+  stays dependency-light. `check-components` fails a parent module that
+  requires anything outside bkit.
 - **Released dependencies only.** Modules depend on other bkit modules
   through published versions. `replace` directives block a release; only
   unreleased `examples/` modules may use one.
@@ -29,6 +30,14 @@ templates, root registration, and validation steps.
   every bkit module it depends on, and a driver follows its parent.
 - **Errors** are sentinel values matched with `errors.Is` / `errors.As`;
   no panic-driven control flow.
+- **Lint is strict and suppression-free.** `.golangci.yml` enables gosec,
+  depguard, forbidigo, exhaustive, nilnil, contextcheck, thelper, unparam,
+  and more. Library code never imports `unsafe`, `os/exec`, `flag`, `log`,
+  `log/slog`, `math/rand`, or `testing`, never uses `http.DefaultClient` or
+  `time.Sleep`, and never prints. `make no-bypass` fails on any `//nolint`,
+  `//lint:ignore`, or `#nosec`. Fix the finding. A rule that truly does not
+  apply gets an exclusion in `.golangci.yml` scoped to a path and message,
+  with a comment saying why.
 - **100% coverage.** Every module's tests reach 100% statement coverage
   without external services; `coverage-check` enforces it in `make check`,
   CI, and the pre-release gate. Reach external services through an internal
@@ -65,12 +74,14 @@ make doctor
 make check
 ```
 
-`make check` runs `check-components`, format check, lint, vet,
-`tidy-check`, race-enabled tests, `coverage-check` (100% statement
-coverage), `deadcode`, and `vuln` (govulncheck) for the root and every
-component, then builds, vets, and tests the example modules. CI runs the
-same targets and fails when a check leaves the working tree dirty. For one module: `make -C <module> check`; after `make -C <module>
-tests`, `make -C <module> coverage-check` lists any function below 100%. Release flow, recovery, and CI details live in
+`make check` runs `check-components`, the script tests, `no-bypass`,
+format check, lint, vet, `tidy-check`, race-enabled tests, `coverage-check`
+(100% statement coverage), `deadcode`, and `vuln` (govulncheck) for the root
+and every component, builds, vets, and tests the example modules, and ends
+with `api-check`. CI runs the same targets and fails when a check leaves the
+working tree dirty. For one module: `make -C <module> check`; after
+`make -C <module> tests`, `make -C <module> coverage-check` lists any
+function below 100%. Release flow, recovery, and CI details live in
 `docs/development-and-release.md`.
 
 ## Commits

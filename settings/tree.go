@@ -54,8 +54,9 @@ func normalize(v any) any {
 			out[i] = normalize(rv.Index(i).Interface())
 		}
 		return out
+	default:
+		return v
 	}
-	return v
 }
 
 // normalizeNumber keeps integers exact: an integer becomes int64, or uint64
