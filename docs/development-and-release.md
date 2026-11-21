@@ -15,7 +15,7 @@ bkit/
 │   ├── .releaserc.json     semantic-release config, tagFormat <module>/v${version}
 │   ├── drivers/<driver>/   nested driver modules, released separately
 │   └── examples/           optional unreleased example module
-├── scripts/                component, pre-release, and post-release checks
+├── scripts/                tools, component, guardrail, pre-release, and post-release checks
 └── .github/
     ├── workflows/          commitlint, lint, tests, release
     └── release/            pinned semantic-release tooling and bkit-commit-filter
@@ -112,13 +112,27 @@ release.
 | Workflow | Runs on | Does |
 | --- | --- | --- |
 | `commitlint.yml` | pull requests | Lints commit messages and the PR title |
+| `guardrails.yml` | pull requests, including label changes | **Guardrail audit**: runs the base branch's `scripts/guardrail-check.sh`, posts one alarm comment, and fails until the `guardrail-approved` label is applied |
 | `lint.yml` | push to `main`, pull requests, merge queue | Format check, golangci-lint, and `go vet` in every directory with a `go.mod`, including examples |
 | `tests.yml` | push to `main`, pull requests, merge queue | `check-components`; per component `tidy-check`, race tests, `coverage-check`, `deadcode`, and `vuln`; root and example tidiness and example tests; a clean working tree after each job |
 | `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
 
 `lint-result` and `tests-result` aggregate their matrices into single checks
-that stay stable as modules are added; make those the required status
-checks.
+that stay stable as modules are added. Make those and **Guardrail audit** the
+required status checks.
+
+### Guardrail audit
+
+`scripts/guardrail-check.sh` compares a pull request with its base. It
+fails when the change touches a guardrail file (`.golangci.yml`, any
+`Makefile`, `make/`, `scripts/`, `.github/`, `.commitlintrc.json`,
+`.gitignore`, `AGENTS.md`, `.agents/`, or a conformance suite under
+`objex/objextest`, `rdb/rdbtest`, or `stash/stashtest`) or adds a
+`//nolint`, `//lint:ignore`, `#nosec`, `//go:build`, or `t.Skip` line. Run
+it locally with `make guardrail-check`. `GUARDRAIL_APPROVED=true` clears it
+locally, and the `guardrail-approved` label clears it in CI.
+`scripts/guardrail-check_test.sh` covers every rule and runs in
+`make test-scripts`.
 
 ## Releases
 

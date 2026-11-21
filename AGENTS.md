@@ -130,6 +130,15 @@ the index.
 *   `vendor/`, `coverage.out`, `coverage.check.out`, and `.tools/` are build
     output: never edit or commit them.
 *   `go.sum` changes only through `go mod tidy` or `go get`.
+*   Guardrails are protected by `.github/workflows/guardrails.yml` and
+    CODEOWNERS ([ADR 0005](docs/adr/0005-enforce-guardrails-deterministically.md)):
+    `.golangci.yml`, every `Makefile`, `make/`, `scripts/`, `.github/`,
+    `.commitlintrc.json`, `.gitignore`, `AGENTS.md`, `.agents/`, and the
+    conformance suites `objex/objextest`, `rdb/rdbtest`, and
+    `stash/stashtest`. Never add `//nolint`, `//lint:ignore`, `#nosec`, or
+    `t.Skip`, or loosen a check, to make CI pass. Fix the code instead. A
+    deliberate guardrail change says why in the pull request body and waits
+    for Brian's `guardrail-approved` label.
 *   Tags and GitHub Releases come only from the release workflow. Recovering
     a partial release follows `docs/development-and-release.md` and needs
     Brian's approval.
