@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/brian-nunez/bkit/settings"
 )
@@ -46,7 +47,9 @@ func WithNamespace(namespace string) Option {
 }
 
 // WithHTTPClient sets the HTTP client used for requests, for example to
-// trust a private certificate authority. The default is http.DefaultClient.
+// trust a private certificate authority. The default is a client that
+// gives up on a request after 30 seconds, even when its context has no
+// deadline.
 // When a token is set and the client has no CheckRedirect of its own, the
 // Client uses a copy of it that does not follow redirects to another host
 // or from https to http. A client with its own CheckRedirect is used as
@@ -54,6 +57,10 @@ func WithNamespace(namespace string) Option {
 func WithHTTPClient(client *http.Client) Option {
 	return func(c *Client) { c.http = client }
 }
+
+// defaultTimeout bounds each request made with the default client. Tests
+// shorten it.
+var defaultTimeout = 30 * time.Second
 
 // Client reads secrets from one Vault server.
 type Client struct {
@@ -70,7 +77,7 @@ func New(address string, opts ...Option) (*Client, error) {
 	if err != nil || (base.Scheme != "http" && base.Scheme != "https") || base.Host == "" {
 		return nil, fmt.Errorf("%w: %q", ErrInvalidAddress, address)
 	}
-	c := &Client{base: base, http: http.DefaultClient}
+	c := &Client{base: base, http: &http.Client{Timeout: defaultTimeout}}
 	for _, opt := range opts {
 		opt(c)
 	}

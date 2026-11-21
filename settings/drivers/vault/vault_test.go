@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/brian-nunez/bkit/settings"
 	"github.com/brian-nunez/bkit/settings/drivers/vault"
@@ -293,5 +294,25 @@ func TestRedirectCallerPolicy(t *testing.T) {
 	}
 	if !called || other.last == nil {
 		t.Fatal("caller's CheckRedirect not used")
+	}
+}
+
+func TestDefaultClientTimesOut(t *testing.T) {
+	t.Cleanup(vault.SetDefaultTimeout(50 * time.Millisecond))
+	srv := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	t.Cleanup(srv.Close)
+	for name, opts := range map[string][]vault.Option{
+		"no token":   nil,
+		"with token": {vault.WithToken("vault-token")},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := mustNew(t, srv.URL, opts...).KV2("kv", "app").Load(context.Background())
+			var timeout interface{ Timeout() bool }
+			if !errors.As(err, &timeout) || !timeout.Timeout() {
+				t.Fatalf("err = %v, want a request timeout", err)
+			}
+		})
 	}
 }
