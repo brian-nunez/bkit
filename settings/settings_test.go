@@ -252,9 +252,9 @@ func TestJSON(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "object", doc: `{"a": 1, "a": 2}`, want: map[string]any{"a": int64(2)}},
-		{name: "null", doc: `null`, want: map[string]any{}},
 		{name: "empty", doc: ``, wantErr: true},
 		{name: "array", doc: `[1]`, wantErr: true},
+		{name: "null", doc: `null`, wantErr: true},
 		{name: "invalid", doc: `{`, wantErr: true},
 		{name: "trailing value", doc: `{} {}`, wantErr: true},
 		{name: "trailing garbage", doc: `{} x`, wantErr: true},
