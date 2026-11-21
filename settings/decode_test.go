@@ -135,6 +135,7 @@ func TestGetErrors(t *testing.T) {
 	cfg := load(t, map[string]any{
 		"str": "text", "int": 42, "neg": -1, "float": 2.5, "bool": true, "nil": nil,
 		"big": uint64(math.MaxUint64), "huge": 1e30, "max": math.MaxFloat64, "list": []any{"a", 1.5},
+		"hexf": "0x1p3", "nan": "NaN", "inf": "-Inf",
 		"odd53": int64(1<<53 + 1), "maxint": int64(math.MaxInt64), "odd24": 1<<24 + 1,
 		"map": map[string]any{"a": "x"}, "empty": "",
 	})
@@ -163,6 +164,10 @@ func TestGetErrors(t *testing.T) {
 		{"bool to uint", func() error { _, err := settings.Get[uint](cfg, "bool"); return err }, "bool", settings.ErrType},
 		{"uint8 fits", func() error { _, err := settings.Get[uint8](cfg, "int"); return err }, "", nil},
 		{"uint8 too big", func() error { _, err := settings.Get[uint8](cfg, "big"); return err }, "big", settings.ErrType},
+		{"hex string to float", func() error { _, err := settings.Get[float64](cfg, "hexf"); return err }, "hexf", settings.ErrType},
+		{"NaN string to float", func() error { _, err := settings.Get[float64](cfg, "nan"); return err }, "nan", settings.ErrType},
+		{"Inf string to float", func() error { _, err := settings.Get[float64](cfg, "inf"); return err }, "inf", settings.ErrType},
+		{"empty string to float", func() error { _, err := settings.Get[float64](cfg, "empty"); return err }, "empty", settings.ErrType},
 		{"string to float", func() error { _, err := settings.Get[float64](cfg, "str"); return err }, "str", settings.ErrType},
 		{"bool to float", func() error { _, err := settings.Get[float64](cfg, "bool"); return err }, "bool", settings.ErrType},
 		{"inexact int to float", func() error { _, err := settings.Get[float64](cfg, "odd53"); return err }, "odd53", settings.ErrType},

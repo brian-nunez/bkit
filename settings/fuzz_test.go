@@ -587,6 +587,9 @@ func wantFloat64(v any) (float64, bool) {
 	case float64:
 		return x, true
 	case string:
+		if strings.Trim(x, "0123456789+-.eE") != "" {
+			return 0, false
+		}
 		f, err := strconv.ParseFloat(x, 64)
 		return f, err == nil
 	}

@@ -327,11 +327,21 @@ func toFloat(v reflect.Value, bits int) (float64, bool) {
 	case reflect.Float32, reflect.Float64:
 		return v.Float(), true
 	case reflect.String:
-		f, err := strconv.ParseFloat(v.String(), 64)
-		return f, err == nil
+		return parseDecimalFloat(v.String())
 	default:
 		return 0, false
 	}
+}
+
+// parseDecimalFloat parses s as a finite decimal float such as -1.5e3.
+// strconv.ParseFloat alone also accepts hex floats, underscores, NaN, and
+// Inf, which config files and the environment do not mean as numbers.
+func parseDecimalFloat(s string) (float64, bool) {
+	if s == "" || strings.Trim(s, "0123456789+-.eE") != "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	return f, err == nil
 }
 
 // roundFloat rounds f to the precision of a float with the given bit size.

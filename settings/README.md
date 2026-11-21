@@ -96,7 +96,8 @@ kept.
 
 Strings convert to numbers, booleans, durations, and types that implement
 `encoding.TextUnmarshaler`, so a value from the environment can be read as
-an `int`. `Decode` matches struct fields by their `settings:"name"` tag or
+an `int`. A string reads as a float only when it is a finite decimal number
+such as `-1.5e3`. Hex floats, `NaN`, and `Inf` return `ErrType`. `Decode` matches struct fields by their `settings:"name"` tag or
 by field name. Fields with no matching key keep their current value, which
 lets a pre-filled struct hold defaults. A pre-filled map with string keys,
 including `map[string]any`, keeps the entries the configuration does not
