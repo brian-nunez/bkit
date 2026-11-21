@@ -163,13 +163,13 @@ func splitMigration(src string, d Dialect) (noTx bool, stmts []statement, err er
 // directive reports the directive on the line at s.i: a line comment whose
 // text starts with "rdb:".
 func (s *splitter) directive() (string, bool) {
-	line := strings.TrimSpace(s.src[s.i:s.lineEnd(s.i)])
+	line := trimSQLSpace(s.src[s.i:s.lineEnd(s.i)])
 	rest, ok := strings.CutPrefix(line, "--")
 	if !ok {
 		return "", false
 	}
-	name, ok := strings.CutPrefix(strings.TrimSpace(rest), "rdb:")
-	return strings.TrimSpace(name), ok
+	name, ok := strings.CutPrefix(trimSQLSpace(rest), "rdb:")
+	return trimSQLSpace(name), ok
 }
 
 // apply handles the directive name on the line at s.i and moves past it.
@@ -206,12 +206,12 @@ func (s *splitter) block(at int) error {
 			}
 			body := s.src[bodyStart:s.i]
 			s.nextLine()
-			trimmed := strings.TrimLeft(body, " \t\r\n")
-			if strings.TrimSpace(trimmed) == "" {
+			trimmed := strings.TrimLeft(body, sqlSpace)
+			if trimSQLSpace(trimmed) == "" {
 				return fmt.Errorf("line %d: empty %s block", at, directiveBegin)
 			}
 			line := bodyLine + strings.Count(body[:len(body)-len(trimmed)], "\n")
-			s.stmts = append(s.stmts, statement{sql: strings.TrimSpace(trimmed), line: line})
+			s.stmts = append(s.stmts, statement{sql: trimSQLSpace(trimmed), line: line})
 			return nil
 		}
 		s.nextLine()
@@ -232,7 +232,7 @@ func (s *splitter) token() {
 		s.advance(end)
 		s.start = end
 		return
-	case c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' || c == '\v':
+	case strings.IndexByte(sqlSpace, c) >= 0:
 		code = false
 	case c == '-' && s.lineComment(i):
 		end, code = s.lineEnd(i), false
@@ -313,8 +313,18 @@ func (s *splitter) advance(end int) {
 // emit ends the current statement at end, keeping it when it holds code.
 func (s *splitter) emit(end int) {
 	if s.code != 0 {
-		s.stmts = append(s.stmts, statement{sql: strings.TrimSpace(s.src[s.start:end]), line: s.code})
+		s.stmts = append(s.stmts, statement{sql: trimSQLSpace(s.src[s.start:end]), line: s.code})
 	}
 	s.code = 0
 	s.start = end
+}
+
+// sqlSpace is the whitespace every supported database skips between
+// tokens. Other Unicode spaces are code to the server, so the splitter
+// keeps them in statements.
+const sqlSpace = " \t\r\n\f\v"
+
+// trimSQLSpace returns s without leading and trailing sqlSpace.
+func trimSQLSpace(s string) string {
+	return strings.Trim(s, sqlSpace)
 }
