@@ -25,7 +25,7 @@ type user struct {
 	FullName string
 	Password string `db:"-"`
 	Nick     sql.NullString
-	secret   string //nolint:unused // proves unexported fields are skipped
+	secret   string // proves unexported fields are skipped
 	audit
 	Timestamps
 }
@@ -36,22 +36,22 @@ func userRow(id int64, email string) []driver.Value {
 	return []driver.Value{id, email, "Ada " + email, "admin", time.Unix(0, 0).UTC(), nil}
 }
 
-func scanDB(t *testing.T, cols []string, data ...[]driver.Value) (*DB, *testDriver) {
+func scanDB(t *testing.T, cols []string, data ...[]driver.Value) *DB {
 	t.Helper()
 	d := newDriver(SQLite)
 	d.db.query = rowsOf(cols, data...)
-	return mustOpen(t, d), d
+	return mustOpen(t, d)
 }
 
 func TestOneStruct(t *testing.T) {
-	db, _ := scanDB(t, userCols, userRow(7, "a@x"), userRow(8, "b@x"))
+	db := scanDB(t, userCols, userRow(7, "a@x"), userRow(8, "b@x"))
 	for range 2 { // the second call uses the cached field set
 		u, err := One[user](context.Background(), db, "SELECT")
 		if err != nil {
 			t.Fatalf("One: %v", err)
 		}
 		if u.ID != 7 || u.Email != "a@x" || u.FullName != "Ada a@x" || u.CreatedBy != "admin" ||
-			!u.CreatedAt.Equal(time.Unix(0, 0)) || u.Nick.Valid {
+			!u.CreatedAt.Equal(time.Unix(0, 0)) || u.Nick.Valid || u.secret != "" {
 			t.Errorf("One = %+v", u)
 		}
 	}
@@ -59,26 +59,26 @@ func TestOneStruct(t *testing.T) {
 
 func TestOneScalar(t *testing.T) {
 	ctx := context.Background()
-	db, _ := scanDB(t, []string{"count"}, []driver.Value{int64(42)})
+	db := scanDB(t, []string{"count"}, []driver.Value{int64(42)})
 	n, err := One[int](ctx, db, "SELECT count(*)")
 	if err != nil || n != 42 {
 		t.Fatalf("One[int] = %d, %v", n, err)
 	}
 
 	when := time.Unix(10, 0).UTC()
-	db, _ = scanDB(t, []string{"at"}, []driver.Value{when})
+	db = scanDB(t, []string{"at"}, []driver.Value{when})
 	at, err := One[time.Time](ctx, db, "SELECT")
 	if err != nil || !at.Equal(when) {
 		t.Fatalf("One[time.Time] = %v, %v", at, err)
 	}
 
-	db, _ = scanDB(t, []string{"nick"}, []driver.Value{"ada"})
+	db = scanDB(t, []string{"nick"}, []driver.Value{"ada"})
 	nick, err := One[sql.NullString](ctx, db, "SELECT")
 	if err != nil || nick.String != "ada" {
 		t.Fatalf("One[sql.NullString] = %v, %v", nick, err)
 	}
 
-	db, _ = scanDB(t, []string{"a", "b"}, []driver.Value{1, 2})
+	db = scanDB(t, []string{"a", "b"}, []driver.Value{1, 2})
 	if _, err := One[int](ctx, db, "SELECT"); !errors.Is(err, ErrScan) {
 		t.Fatalf("two columns into int: err = %v, want ErrScan", err)
 	}
@@ -87,7 +87,7 @@ func TestOneScalar(t *testing.T) {
 func TestOneErrors(t *testing.T) {
 	ctx := context.Background()
 
-	db, _ := scanDB(t, []string{"n"})
+	db := scanDB(t, []string{"n"})
 	_, err := One[int](ctx, db, "SELECT")
 	if !errors.Is(err, ErrNotFound) || !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("no rows: err = %v", err)
@@ -121,7 +121,7 @@ func TestOneErrors(t *testing.T) {
 func TestStrictScan(t *testing.T) {
 	ctx := context.Background()
 	cols := []string{"user_id", "unknown"}
-	db, _ := scanDB(t, cols, []driver.Value{int64(1), "x"})
+	db := scanDB(t, cols, []driver.Value{int64(1), "x"})
 	_, err := One[user](ctx, db, "SELECT")
 	if !errors.Is(err, ErrScan) || !strings.Contains(err.Error(), `column "unknown" has no field`) {
 		t.Fatalf("strict: err = %v", err)
@@ -164,7 +164,7 @@ func TestFieldMatching(t *testing.T) {
 			for i := range row {
 				row[i] = "v"
 			}
-			db, _ := scanDB(t, tt.cols, row)
+			db := scanDB(t, tt.cols, row)
 			_, err := One[user](ctx, db, "SELECT")
 			if tt.want == "" {
 				if err != nil {
@@ -185,16 +185,16 @@ func TestAmbiguousFields(t *testing.T) {
 		A string `db:"x"`
 		B string `db:"X"`
 	}
-	db, _ := scanDB(t, []string{"x"}, []driver.Value{"v"})
+	db := scanDB(t, []string{"x"}, []driver.Value{"v"})
 	if _, err := One[byTag](ctx, db, "SELECT"); !errors.Is(err, ErrScan) || !strings.Contains(err.Error(), "matches fields A and B") {
 		t.Fatalf("tags: err = %v", err)
 	}
 
 	type byName struct {
 		CreatedAt  string
-		Created_At string //nolint:staticcheck // deliberately ambiguous with CreatedAt
+		Created_At string // deliberately ambiguous with CreatedAt
 	}
-	db, _ = scanDB(t, []string{"created_at"}, []driver.Value{"v"})
+	db = scanDB(t, []string{"created_at"}, []driver.Value{"v"})
 	if _, err := One[byName](ctx, db, "SELECT"); !errors.Is(err, ErrScan) || !strings.Contains(err.Error(), "matches fields CreatedAt and Created_At") {
 		t.Fatalf("names: err = %v", err)
 	}
@@ -202,7 +202,7 @@ func TestAmbiguousFields(t *testing.T) {
 
 func TestAll(t *testing.T) {
 	ctx := context.Background()
-	db, _ := scanDB(t, userCols, userRow(1, "a"), userRow(2, "b"))
+	db := scanDB(t, userCols, userRow(1, "a"), userRow(2, "b"))
 	users, err := All[user](ctx, db, "SELECT")
 	if err != nil {
 		t.Fatal(err)
@@ -212,13 +212,13 @@ func TestAll(t *testing.T) {
 		t.Errorf("ids = %v", ids)
 	}
 
-	db, _ = scanDB(t, []string{"n"})
+	db = scanDB(t, []string{"n"})
 	empty, err := All[int](ctx, db, "SELECT")
 	if err != nil || empty == nil || len(empty) != 0 {
 		t.Errorf("All with no rows = %#v, %v; want empty non-nil", empty, err)
 	}
 
-	db, _ = scanDB(t, []string{"n"}, []driver.Value{"x"})
+	db = scanDB(t, []string{"n"}, []driver.Value{"x"})
 	if got, err := All[int](ctx, db, "SELECT"); !errors.Is(err, ErrScan) || got != nil {
 		t.Errorf("All = %v, %v; want nil, ErrScan", got, err)
 	}
@@ -226,7 +226,7 @@ func TestAll(t *testing.T) {
 
 func TestEach(t *testing.T) {
 	ctx := context.Background()
-	db, _ := scanDB(t, []string{"n"}, []driver.Value{int64(1)}, []driver.Value{int64(2)}, []driver.Value{int64(3)})
+	db := scanDB(t, []string{"n"}, []driver.Value{int64(1)}, []driver.Value{int64(2)}, []driver.Value{int64(3)})
 	var got []int
 	for n, err := range Each[int](ctx, db, "SELECT") {
 		if err != nil {

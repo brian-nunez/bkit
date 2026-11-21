@@ -62,6 +62,9 @@ jobs:
       - name: Test scripts
         run: make --no-print-directory test-scripts
 
+      - name: No lint suppression directives
+        run: make --no-print-directory no-bypass
+
       - name: Root and example modules are tidy
         run: make --no-print-directory tidy-check COMPONENTS=
 

@@ -135,7 +135,7 @@ func TestBackendErrorsAreWrapped(t *testing.T) {
 	inner := &stash.Error{Op: "custom", Err: stash.ErrExists}
 	f2 := newFake()
 	f2.failAll = inner
-	if err := stash.New(f2).Set(ctx, "k", nil); err != inner { //nolint:errorlint // the same value, unwrapped
+	if err := stash.New(f2).Set(ctx, "k", nil); err != inner { // the same value, unwrapped
 		t.Errorf("Set err = %v, want the backend's *Error", err)
 	}
 }

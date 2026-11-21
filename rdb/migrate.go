@@ -215,8 +215,9 @@ func (m *migrator) lockQueries() (lock, unlock string, arg any) {
 		// Hashing keeps it within the 64 characters MySQL allows.
 		name := "SHA2(CONCAT('rdb.migrate.', COALESCE(DATABASE(), ''), '.', ?), 256)"
 		return "SELECT GET_LOCK(" + name + ", 0)", "SELECT RELEASE_LOCK(" + name + ")", m.table
+	default:
+		return "", "", nil
 	}
-	return "", "", nil
 }
 
 // lock takes the run's session lock, waiting while another run holds it.
@@ -325,9 +326,10 @@ func (m *migrator) begin(ctx context.Context) (*stepTx, error) {
 			}
 		}
 		return &stepTx{run: m.conn, commit: end("COMMIT"), rollback: end("ROLLBACK")}, nil
+	default:
+		none := func() error { return nil }
+		return &stepTx{run: m.conn, commit: none, rollback: none}, nil
 	}
-	none := func() error { return nil }
-	return &stepTx{run: m.conn, commit: none, rollback: none}, nil
 }
 
 // step applies the next pending migration and returns it, or returns nil
@@ -474,6 +476,7 @@ func (m *migrator) existsQuery() string {
 		return "SELECT CASE WHEN to_regclass(CAST(? AS text)) IS NULL THEN 0 ELSE 1 END"
 	case MySQL:
 		return "SELECT count(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?"
+	default:
+		return "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?"
 	}
-	return "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?"
 }

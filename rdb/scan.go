@@ -139,11 +139,11 @@ func newScanner[T any](rows *sql.Rows, strict bool) (*scanner[T], error) {
 	s := &scanner[T]{fields: make([][]int, len(cols))}
 	used := make(map[string]string, len(cols))
 	for i, col := range cols {
-		f, err := fields.match(col)
+		f, ok, err := fields.match(col)
 		if err != nil {
 			return nil, err
 		}
-		if f == nil {
+		if !ok {
 			if strict {
 				return nil, scanError("column %q has no field in %s", col, t)
 			}
@@ -247,9 +247,9 @@ func collectFields(t reflect.Type, parent []int, prefix string, fs *fieldSet) {
 
 // match returns the field for column col: the field tagged col ignoring
 // case, or else the untagged field whose name matches col ignoring case and
-// underscores. It returns nil when none matches and ErrScan when two fields
-// match equally.
-func (fs fieldSet) match(col string) (*field, error) {
+// underscores. It reports false when none matches, and ErrScan when two
+// fields match equally.
+func (fs fieldSet) match(col string) (*field, bool, error) {
 	lower := strings.ToLower(col)
 	key := normalize(col)
 	var found *field
@@ -263,15 +263,15 @@ func (fs fieldSet) match(col string) (*field, error) {
 				continue
 			}
 			if found != nil {
-				return nil, scanError("column %q matches fields %s and %s", col, found.name, f.name)
+				return nil, false, scanError("column %q matches fields %s and %s", col, found.name, f.name)
 			}
 			found = f
 		}
 		if found != nil {
-			return found, nil
+			return found, true, nil
 		}
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
 // normalize lowercases s and removes underscores.

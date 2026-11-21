@@ -40,8 +40,10 @@ func TestDSN(t *testing.T) {
 		{url: "mysql://app:p%40ss%2Fw%3Ford@db:3307/app", user: "app", pass: "p@ss/w?ord", net: "tcp", addr: "db:3307", db: "app", parseTime: true},
 		{url: "mysql://[::1]:3306/app", net: "tcp", addr: "[::1]:3306", db: "app", parseTime: true},
 		{url: "mysql:///app?parseTime=false", net: "tcp", addr: "127.0.0.1:3306", db: "app"},
-		{url: "mariadb://u@db/app?time_zone=%27%2B00%3A00%27&loc=America%2FNew_York", user: "u", net: "tcp", addr: "db:3306", db: "app", parseTime: true,
-			params: map[string]string{"time_zone": "'+00:00'"}},
+		{
+			url: "mariadb://u@db/app?time_zone=%27%2B00%3A00%27&loc=America%2FNew_York", user: "u", net: "tcp", addr: "db:3306", db: "app", parseTime: true,
+			params: map[string]string{"time_zone": "'+00:00'"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.url, func(t *testing.T) {
@@ -119,8 +121,10 @@ func TestConfigURL(t *testing.T) {
 	}{
 		{Config{}, "mysql:///"},
 		{Config{Host: "db", Database: "app"}, "mysql://db/app"},
-		{Config{Host: "db", Port: 3307, User: "app", Password: "p@ss", Params: map[string]string{"tls": "true"}},
-			"mysql://app:p%40ss@db:3307/?tls=true"},
+		{
+			Config{Host: "db", Port: 3307, User: "app", Password: "p@ss", Params: map[string]string{"tls": "true"}},
+			"mysql://app:p%40ss@db:3307/?tls=true",
+		},
 	}
 	for _, tt := range tests {
 		if got := tt.cfg.url().String(); got != tt.want {

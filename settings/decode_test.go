@@ -365,14 +365,22 @@ func TestErrorsOmitValues(t *testing.T) {
 		err  func() error
 		want string
 	}{
-		{"scalar", func() error { _, err := settings.Get[int](cfg, "db.password"); return err },
-			"settings: key db.password: type mismatch: cannot use string value as int"},
-		{"duration", func() error { _, err := settings.Get[time.Duration](cfg, "db.password"); return err },
-			"settings: key db.password: type mismatch: cannot use string value as time.Duration"},
-		{"section", func() error { var s struct{ DB string }; return cfg.Decode(&s) },
-			"settings: key db: type mismatch: cannot use map[string]interface {} value as string"},
-		{"text", func() error { _, err := settings.Get[secretText](cfg, "db.password"); return err },
-			"settings: key db.password: type mismatch: cannot use string value as settings_test.secretText"},
+		{
+			"scalar", func() error { _, err := settings.Get[int](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as int",
+		},
+		{
+			"duration", func() error { _, err := settings.Get[time.Duration](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as time.Duration",
+		},
+		{
+			"section", func() error { var s struct{ DB string }; return cfg.Decode(&s) },
+			"settings: key db: type mismatch: cannot use map[string]interface {} value as string",
+		},
+		{
+			"text", func() error { _, err := settings.Get[secretText](cfg, "db.password"); return err },
+			"settings: key db.password: type mismatch: cannot use string value as settings_test.secretText",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

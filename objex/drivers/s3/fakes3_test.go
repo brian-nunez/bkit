@@ -473,6 +473,7 @@ func newFakeClient(fake *fakeS3) *Client {
 func TestConformanceAgainstFake(t *testing.T) {
 	objextest.Run(t, objextest.Config{
 		NewBucket: func(t *testing.T) objex.Bucket {
+			t.Helper()
 			c := newFakeClient(newFakeS3())
 			if err := c.CreateBucket(context.Background(), "objextest"); err != nil {
 				t.Fatal(err)

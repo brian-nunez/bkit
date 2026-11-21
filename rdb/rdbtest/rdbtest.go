@@ -88,6 +88,8 @@ func newEnv(t *testing.T, cfg Config) *env {
 			routine = "DROP FUNCTION IF EXISTS " + e.name("double") + "(integer)"
 		case rdb.MySQL:
 			routine = "DROP PROCEDURE IF EXISTS " + e.name("fill")
+		default:
+			// SQLite has no stored routines.
 		}
 		if routine != "" {
 			if _, err := e.db.Exec(ctx, routine); err != nil {

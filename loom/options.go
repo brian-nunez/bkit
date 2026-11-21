@@ -101,8 +101,8 @@ type shrinkConfig struct {
 	interrupt bool
 }
 
-func invalid(format string, args ...any) error {
-	return fmt.Errorf("%w: "+format, append([]any{ErrInvalidOption}, args...)...)
+func invalid(msg string) error {
+	return fmt.Errorf("%w: %s", ErrInvalidOption, msg)
 }
 
 // settingOption is accepted by New, as a graph default, and by Add, as a

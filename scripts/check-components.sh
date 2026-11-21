@@ -26,6 +26,17 @@ go_directive() {
   awk '$1 == "go" { print $2; exit }' "$1"
 }
 
+# requirements prints every module path a go.mod requires, direct or
+# indirect, from single-line and block require directives.
+requirements() {
+  awk '
+    $1 == "require" && $2 == "(" { block = 1; next }
+    block && $1 == ")" { block = 0; next }
+    block && NF > 0 && $1 !~ /^\/\// { print $1; next }
+    $1 == "require" && $2 != "(" { print $2 }
+  ' "$1"
+}
+
 # Modules on disk. Example modules are unreleased and stay out of COMPONENTS.
 modules=$(
   find . -type f -name go.mod \
@@ -81,6 +92,20 @@ for component in $components; do
     if [ "$actual_go_version" != "$go_mod_version" ]; then
       fail "$component/go.mod declares go $actual_go_version; GO_MOD_VERSION is $go_mod_version"
     fi
+
+    # Parent modules use the standard library and other bkit modules only.
+    # Third-party dependencies belong in driver modules.
+    case "$component" in
+      */drivers/*) ;;
+      *)
+        for dependency in $(requirements "$component/go.mod"); do
+          case "$dependency" in
+            github.com/brian-nunez/bkit/*) ;;
+            *) fail "$component requires $dependency; parent modules use only the standard library and bkit modules, so move it to a driver" ;;
+          esac
+        done
+        ;;
+    esac
   fi
 
   if [ -f "$component/.releaserc.json" ]; then
