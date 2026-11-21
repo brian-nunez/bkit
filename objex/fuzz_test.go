@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -24,7 +25,7 @@ func keyViolation(key string) string {
 	if !utf8.ValidString(key) {
 		return "invalid UTF-8"
 	}
-	if strings.ContainsFunc(key, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+	if strings.ContainsFunc(key, unicode.IsControl) {
 		return "control character"
 	}
 	if strings.Contains(key, `\`) {
@@ -410,11 +411,14 @@ func forbidKey(rng *rand.Rand, segments []string) (key, rule string) {
 	joined := strings.Join(segments, "/")
 	switch rng.IntN(8) {
 	case 0:
-		c := byte(rng.IntN(0x20))
-		if rng.IntN(4) == 0 {
+		c := rune(rng.IntN(0x20))
+		switch rng.IntN(4) {
+		case 0:
 			c = 0x7f
+		case 1:
+			c = rune(0x80 + rng.IntN(0x20))
 		}
-		return insertAtRuneBoundary(rng, joined, string([]byte{c})), "control character"
+		return insertAtRuneBoundary(rng, joined, string(c)), "control character"
 	case 1:
 		return insertAtRuneBoundary(rng, joined, `\`), "backslash"
 	case 2:

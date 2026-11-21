@@ -3,6 +3,7 @@ package objex
 import (
 	"fmt"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -24,7 +25,7 @@ func ValidateKey(key string) error {
 	}
 
 	for _, r := range key {
-		if r < 0x20 || r == 0x7f {
+		if unicode.IsControl(r) {
 			return invalidKey("key contains a control character")
 		}
 		if r == '\\' {
