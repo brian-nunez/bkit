@@ -15,7 +15,7 @@ EXAMPLES = $(patsubst ./%/go.mod,%,$(shell find . -path '*/examples/*' -name go.
 
 include make/development.mk
 
-.PHONY: build build-actions check check-components clean coverage-check deadcode examples format format-check get-all-release-packages guardrail-check help lint test test-scripts tests tidy-check unit vet vuln
+.PHONY: build build-actions check check-components clean coverage-check deadcode examples format format-check api-check get-all-release-packages guardrail-check help lint test test-scripts tests tidy-check unit vet vuln
 
 help:
 	@echo "bkit developer commands:"
@@ -34,21 +34,28 @@ help:
 	@echo "  make check-components  Validate module registration and release configuration"
 	@echo "  make test-scripts      Run the tests for the scripts in scripts/"
 	@echo "  make guardrail-check   Audit this branch for guardrail changes and bypasses"
+	@echo "  make api-check         Fail on unmarked incompatible API changes in committed work"
 	@echo "  make check             Run the complete local pre-PR validation"
 	@echo "  make clean             Remove generated build and test artifacts"
 
-check: doctor check-components test-scripts format-check lint vet tidy-check tests coverage-check deadcode vuln examples
+check: doctor check-components test-scripts format-check lint vet tidy-check tests coverage-check deadcode vuln examples api-check
 
 check-components:
 	@scripts/check-components.sh
 
-test-scripts:
+test-scripts: check-go
 	@bash scripts/guardrail-check_test.sh
+	@bash scripts/api-check_test.sh
 
 # Exits 1 when the branch changes a guardrail; set GUARDRAIL_APPROVED=true
 # after review. CI runs the same script in guardrails.yml.
 guardrail-check:
 	@bash scripts/guardrail-check.sh
+
+# Compares committed work since origin/main with each touched module's latest
+# release tag. CI runs the same script on every pull request.
+api-check: check-go
+	@bash scripts/api-check.sh
 
 tests: build unit
 

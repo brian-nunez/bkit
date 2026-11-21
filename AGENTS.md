@@ -107,7 +107,9 @@ request title becomes the commit the release tooling reads.
     Every sentence carries information a reviewer cannot get from the diff.
 *   **Footers**: `BREAKING CHANGE: <what breaks and how to migrate>` for
     incompatible changes (and `!` after the type or scope); a breaking change
-    past v1 also changes the module path to `/vN`. `Refs: #<issue>` or
+    past v1 also changes the module path to `/vN`. `make api-check` and the
+    **API compatibility** check fail an incompatible API change without
+    them. `Refs: #<issue>` or
     `Closes: #<issue>` for tracked work.
 *   One logical change per commit, and one module per pull request where
     possible: a squash merge that touches several modules releases each of
