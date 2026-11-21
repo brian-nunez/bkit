@@ -39,6 +39,7 @@ func TestGetConversions(t *testing.T) {
 		"str": "text", "int": 42, "neg": -1, "float": 2.5, "whole": 3.0, "bool": true,
 		"sint": "-7", "suint": "7", "sfloat": "1.5", "sbool": "true", "sdur": "1m30s",
 		"big": uint64(math.MaxUint64), "huge": 1e30, "level": level(3), "mode": mode("fast"),
+		"pow63": uint64(1 << 63), "minint": int64(math.MinInt64),
 		"addr": "127.0.0.1", "list": []any{"a", "b"}, "nil": nil,
 		"map": map[string]any{"a": 1, "b": 2},
 	})
@@ -87,8 +88,10 @@ func TestGetConversions(t *testing.T) {
 	check("float<-string", f, 1.5, err)
 	f, err = settings.Get[float64](cfg, "int")
 	check("float<-int", f, 42.0, err)
-	f, err = settings.Get[float64](cfg, "big")
-	check("float<-uint64", f, float64(math.MaxUint64), err)
+	f, err = settings.Get[float64](cfg, "pow63")
+	check("float<-uint64", f, 0x1p63, err)
+	f, err = settings.Get[float64](cfg, "minint")
+	check("float<-min int64", f, -0x1p63, err)
 	f32, err := settings.Get[float32](cfg, "float")
 	check("float32<-float", f32, float32(2.5), err)
 
@@ -132,6 +135,7 @@ func TestGetErrors(t *testing.T) {
 	cfg := load(t, map[string]any{
 		"str": "text", "int": 42, "neg": -1, "float": 2.5, "bool": true, "nil": nil,
 		"big": uint64(math.MaxUint64), "huge": 1e30, "max": math.MaxFloat64, "list": []any{"a", 1.5},
+		"odd53": int64(1<<53 + 1), "maxint": int64(math.MaxInt64), "odd24": 1<<24 + 1,
 		"map": map[string]any{"a": "x"}, "empty": "",
 	})
 
@@ -161,6 +165,10 @@ func TestGetErrors(t *testing.T) {
 		{"uint8 too big", func() error { _, err := settings.Get[uint8](cfg, "big"); return err }, "big", settings.ErrType},
 		{"string to float", func() error { _, err := settings.Get[float64](cfg, "str"); return err }, "str", settings.ErrType},
 		{"bool to float", func() error { _, err := settings.Get[float64](cfg, "bool"); return err }, "bool", settings.ErrType},
+		{"inexact int to float", func() error { _, err := settings.Get[float64](cfg, "odd53"); return err }, "odd53", settings.ErrType},
+		{"max int64 to float", func() error { _, err := settings.Get[float64](cfg, "maxint"); return err }, "maxint", settings.ErrType},
+		{"inexact uint64 to float", func() error { _, err := settings.Get[float64](cfg, "big"); return err }, "big", settings.ErrType},
+		{"inexact int to float32", func() error { _, err := settings.Get[float32](cfg, "odd24"); return err }, "odd24", settings.ErrType},
 		{"float32 fits", func() error { _, err := settings.Get[float32](cfg, "huge"); return err }, "", nil},
 		{"float32 overflow", func() error { _, err := settings.Get[float32](cfg, "max"); return err }, "max", settings.ErrType},
 		{"bad duration", func() error { _, err := settings.Get[time.Duration](cfg, "str"); return err }, "str", settings.ErrType},

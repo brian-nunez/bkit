@@ -575,13 +575,15 @@ func wantInt(v any) (int, bool) {
 }
 
 // wantFloat64 is the conversion of a normalized value to float64. Integers
-// convert to the nearest float64.
+// convert only when float64 holds them exactly.
 func wantFloat64(v any) (float64, bool) {
 	switch x := v.(type) {
 	case int64:
-		return float64(x), true
+		f, acc := new(big.Float).SetInt64(x).Float64()
+		return f, acc == big.Exact
 	case uint64:
-		return float64(x), true
+		f, acc := new(big.Float).SetUint64(x).Float64()
+		return f, acc == big.Exact
 	case float64:
 		return x, true
 	case string:

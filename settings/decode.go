@@ -108,7 +108,7 @@ func assign(dst reflect.Value, src any, path string) error {
 		}
 		dst.SetUint(u)
 	case reflect.Float32, reflect.Float64:
-		f, ok := toFloat(sv)
+		f, ok := toFloat(sv, dst.Type().Bits())
 		if !ok || dst.OverflowFloat(f) {
 			return typeError(path, src, dst.Type())
 		}
@@ -312,12 +312,18 @@ func toUint(v reflect.Value) (uint64, bool) {
 	}
 }
 
-func toFloat(v reflect.Value) (float64, bool) {
+// toFloat converts v to a float of the given bit size. An integer converts
+// only when the float holds it exactly.
+func toFloat(v reflect.Value, bits int) (float64, bool) {
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return float64(v.Int()), true
+		i := v.Int()
+		f := roundFloat(float64(i), bits)
+		return f, f >= -0x1p63 && f < 0x1p63 && int64(f) == i
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return float64(v.Uint()), true
+		u := v.Uint()
+		f := roundFloat(float64(u), bits)
+		return f, f < 0x1p64 && uint64(f) == u
 	case reflect.Float32, reflect.Float64:
 		return v.Float(), true
 	case reflect.String:
@@ -326,4 +332,12 @@ func toFloat(v reflect.Value) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// roundFloat rounds f to the precision of a float with the given bit size.
+func roundFloat(f float64, bits int) float64 {
+	if bits == 32 {
+		return float64(float32(f))
+	}
+	return f
 }

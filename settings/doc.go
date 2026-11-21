@@ -31,7 +31,9 @@
 // [ErrType]. The GetString, GetInt, GetBool, GetFloat, and GetDuration
 // methods return a caller-supplied default instead of an error.
 // [Config.Decode] fills a struct. Strings convert to numbers, booleans, and
-// durations, so values from the environment read as typed values.
+// durations, so values from the environment read as typed values. An
+// integer converts to a float only when the float holds it exactly; any
+// other integer is an [ErrType].
 //
 // # Concurrency and cancellation
 //
