@@ -8,3 +8,4 @@ Decisions that shape this project, in [MADR](https://adr.github.io/madr/) format
 | [0002](0002-implement-backends-as-driver-modules.md) | Implement backends as driver modules passed in explicitly | accepted | 2026-11-14 |
 | [0003](0003-run-rdb-migrations-in-the-parent-module.md) | Run rdb migrations in the parent module, the same way on every database | accepted | 2026-11-15 |
 | [0004](0004-run-loom-tasks-as-untrusted-code-with-caller-owned-policy.md) | Run loom tasks as untrusted code, with every task policy owned by the caller | accepted | 2026-11-15 |
+| [0005](0005-enforce-guardrails-deterministically.md) | Enforce quality with deterministic checks, and alarm on any change that weakens them | accepted | 2026-11-21 |

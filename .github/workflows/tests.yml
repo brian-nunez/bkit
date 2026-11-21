@@ -53,6 +53,9 @@ jobs:
           go-version: ${{ needs.generate-matrix.outputs.go-version }}
           cache-dependency-path: "**/go.sum"
 
+      - name: Test scripts
+        run: make --no-print-directory test-scripts
+
       - name: Root and example modules are tidy
         run: make --no-print-directory tidy-check COMPONENTS=
 
