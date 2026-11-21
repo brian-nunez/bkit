@@ -104,7 +104,9 @@ set, and nested maps merge key by key. An empty path reads the whole tree.
 
 JSON integers keep full precision. An integer past the `int64` range reads
 as a `uint64`, and an integer past the `uint64` range is kept as its decimal
-string, which reads as a `string` or converts to a `float64`.
+string, which reads as a `string` or converts to a `float64`. An integer
+value converts to a float only when the float holds it exactly, so
+2^53 + 1 read as a `float64` returns `ErrType`.
 
 ## Cancellation
 
