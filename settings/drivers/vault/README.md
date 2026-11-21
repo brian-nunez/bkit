@@ -52,6 +52,9 @@ file's format.
 | `vault.WithNamespace(ns)` | Sends the namespace in `X-Vault-Namespace` |
 | `vault.WithHTTPClient(c)` | Uses `c` for requests, for example to trust a private CA |
 
+Without `WithHTTPClient`, requests use a client that stops each request after
+30 seconds, so a server that never answers cannot hang `settings.Load`.
+
 Without `WithToken`, no token is sent. This works with a Vault Agent or
 proxy that adds the token. Renewing the token is up to the caller.
 
