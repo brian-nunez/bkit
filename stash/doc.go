@@ -18,7 +18,8 @@
 //
 // A key is non-empty, valid UTF-8, and at most [MaxKeyLen] bytes including
 // its namespace. [Store.Namespace] returns a store whose keys live under a
-// prefix, and namespaces nest. [Store.Clear] empties one namespace and
+// prefix, and namespaces nest. A namespace name is non-empty, valid UTF-8,
+// and contains no colon. [Store.Clear] empties one namespace and
 // refuses to run on the root store.
 //
 // # Errors

@@ -153,12 +153,13 @@ func New(b Backend) *Store {
 
 // Namespace returns a Store whose keys live under name, separated by a
 // colon. Namespaces nest, and every namespace store shares s's Backend. A
-// name that is empty or not valid UTF-8 makes every call on the returned
-// store fail with ErrInvalidKey.
+// name that is empty, not valid UTF-8, or contains a colon makes every call
+// on the returned store fail with ErrInvalidKey, so Namespace("a:b") never
+// shares keys with Namespace("a").Namespace("b").
 func (s *Store) Namespace(name string) *Store {
 	ns := *s
-	if name == "" || !utf8.ValidString(name) {
-		ns.err = &Error{Op: "namespace", Err: fmt.Errorf("%w: namespace must be non-empty UTF-8", ErrInvalidKey)}
+	if name == "" || !utf8.ValidString(name) || strings.Contains(name, separator) {
+		ns.err = &Error{Op: "namespace", Err: fmt.Errorf("%w: namespace must be non-empty UTF-8 without a colon", ErrInvalidKey)}
 	}
 	ns.prefix = s.prefix + name + separator
 	return &ns
