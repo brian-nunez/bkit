@@ -60,6 +60,9 @@ trailing `/` on the prefix is optional.
 | `consul.WithNamespace(ns)` | Reads from namespace `ns` |
 | `consul.WithHTTPClient(c)` | Uses `c` for requests, for example to trust a private CA |
 
+Without `WithHTTPClient`, requests use a client that stops each request after
+30 seconds, so a server that never answers cannot hang `settings.Load`.
+
 With a token set, redirects to another host or from https to http are not
 followed, and the redirect is reported as `consul.ErrResponse`. A client
 passed to `WithHTTPClient` with its own `CheckRedirect` keeps that policy.
