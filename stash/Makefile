@@ -3,7 +3,8 @@
 MODULE_NAME := stash
 REPOSITORY_ROOT := $(abspath $(CURDIR)/..)
 
-# Package paths (an extended regular expression) left out of coverage-check.
+# Package paths (an extended regular expression) left out of coverage-check
+# and deadcode.
 # Reserved for shared test-helper packages, such as a driver contract suite;
 # every other package must reach 100% statement coverage.
 #
@@ -16,24 +17,27 @@ COVERAGE_EXCLUDE ?= /stashtest/
 
 include $(REPOSITORY_ROOT)/make/development.mk
 
-.PHONY: benchmarks benchmarks-actions benchmarks-nobuild build build-actions check clean coverage-check format format-check help lint test tests tests-actions tests-nobuild tidy vet
+.PHONY: benchmarks benchmarks-actions benchmarks-nobuild build build-actions check clean coverage-check deadcode format format-check help lint test tests tests-actions tests-nobuild tidy tidy-check vet vuln
 
 help:
 	@echo "$(MODULE_NAME) module developer commands:"
 	@echo "  make doctor        Validate required local tool versions."
-	@echo "  make tools         Install the pinned repository-local golangci-lint."
+	@echo "  make tools         Install the pinned developer tools into .tools/."
 	@echo "  make format        Apply Go formatting."
 	@echo "  make format-check  Report formatting differences without changing files."
 	@echo "  make lint          Run the CI-equivalent Go linters."
 	@echo "  make vet           Run go vet."
 	@echo "  make tests         Build and run race-enabled tests."
 	@echo "  make coverage-check  Require 100% statement coverage from the last test run."
+	@echo "  make deadcode      Fail on functions no test or caller reaches."
+	@echo "  make vuln          Fail on known vulnerabilities in reachable code."
 	@echo "  make benchmarks    Build and run benchmarks."
 	@echo "  make tidy          Tidy go.mod and go.sum."
+	@echo "  make tidy-check    Fail when go.mod or go.sum is not tidy."
 	@echo "  make check         Run the complete local pre-PR validation."
 	@echo "  make clean         Remove generated build and test artifacts."
 
-check: doctor format-check lint vet tests coverage-check
+check: doctor format-check lint vet tidy-check tests coverage-check deadcode vuln
 
 build: check-go
 	@echo "Building $(MODULE_NAME)..."
@@ -45,6 +49,12 @@ build-actions: build
 tidy: check-go
 	@echo "Tidying $(MODULE_NAME)..."
 	$(GO_BINARY) mod tidy -go=$(GO_MOD_VERSION)
+
+tidy-check: check-go
+	@if ! $(GO_BINARY) mod tidy -diff; then \
+		echo "ERROR: $(MODULE_NAME) go.mod or go.sum is not tidy. Run 'make tidy' and commit the result."; \
+		exit 1; \
+	fi
 
 tests: build tests-nobuild
 
@@ -72,6 +82,25 @@ coverage-check: check-go
 		exit 1; \
 	fi; \
 	echo "$(MODULE_NAME) coverage: $$total"
+
+deadcode: check-go
+	@echo "Checking $(MODULE_NAME) for unreachable functions..."
+	@out="$$($(TOOLS) deadcode -test ./...)" || exit 1; \
+	if [ -n "$(COVERAGE_EXCLUDE)" ]; then \
+		out="$$(printf '%s\n' "$$out" | awk -v skip='$(COVERAGE_EXCLUDE)' 'NF && ("/" $$0) !~ skip')"; \
+	fi; \
+	if [ -n "$$out" ]; then \
+		printf '%s\n' "$$out"; \
+		echo "ERROR: $(MODULE_NAME) has unreachable functions. Delete them or reach them from a test."; \
+		exit 1; \
+	fi
+
+vuln: check-go
+	@echo "Scanning $(MODULE_NAME) for known vulnerabilities..."
+	@if ! $(TOOLS) govulncheck ./...; then \
+		echo "ERROR: $(MODULE_NAME) calls code with a known vulnerability. Upgrade the affected module or Go version."; \
+		exit 1; \
+	fi
 
 benchmarks: build benchmarks-nobuild
 

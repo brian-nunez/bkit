@@ -5,15 +5,20 @@ REQUIRED_GO_VERSION ?= 1.27.4
 REQUIRED_GOLANGCI_LINT_VERSION ?= 2.15.0
 GO_MOD_VERSION ?= 1.26.0
 
+# Pinned developer and CI tools. scripts/tools.sh reads these values and
+# installs each tool into .tools/ on first use. A golangci-lint version change
+# also updates the archive checksums in scripts/tools.sh.
+GOVULNCHECK_VERSION ?= v1.10.0
+DEADCODE_VERSION ?= v0.53.0
+GORELEASE_VERSION ?= v0.0.0-20261120182113-8801fbdfac81
+GREMLINS_VERSION ?= v0.6.0
+
 REPOSITORY_ROOT ?= $(CURDIR)
 GO_BINARY ?= go
 GO_BINARY_PATH := $(shell command -v "$(GO_BINARY)" 2>/dev/null || printf '%s' "$(GO_BINARY)")
 GO_BINARY_DIRECTORY := $(dir $(GO_BINARY_PATH))
-LOCAL_TOOLS_DIRECTORY := $(REPOSITORY_ROOT)/.tools/bin
-LOCAL_GOLANGCI_LINT := $(LOCAL_TOOLS_DIRECTORY)/golangci-lint
-GOLANGCI_LINT_BINARY ?= $(if $(wildcard $(LOCAL_GOLANGCI_LINT)),$(LOCAL_GOLANGCI_LINT),golangci-lint)
-GOLANGCI_LINT_COMMAND = PATH="$(GO_BINARY_DIRECTORY):$$PATH" "$(GOLANGCI_LINT_BINARY)"
-GOLANGCI_LINT_PACKAGE := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(REQUIRED_GOLANGCI_LINT_VERSION)
+TOOLS = PATH="$(GO_BINARY_DIRECTORY):$$PATH" "$(REPOSITORY_ROOT)/scripts/tools.sh"
+GOLANGCI_LINT_COMMAND = $(TOOLS) golangci-lint
 
 # Every module builds as a consumer sees it: from its own go.mod, never
 # through a local go.work.
@@ -36,34 +41,24 @@ check-go:
 	fi
 
 check-golangci-lint: check-go
-	@if ! [ -x "$(GOLANGCI_LINT_BINARY)" ] && ! command -v "$(GOLANGCI_LINT_BINARY)" >/dev/null 2>&1; then \
-		echo "ERROR: golangci-lint $(REQUIRED_GOLANGCI_LINT_VERSION) is required, but it was not found."; \
-		echo "Run 'make tools' from the repository root to install the pinned local version."; \
-		exit 1; \
-	fi
-	@actual_version="$$($(GOLANGCI_LINT_COMMAND) version 2>/dev/null | sed -n 's/^golangci-lint has version \([^ ]*\).*/\1/p')"; \
-	if [ "$$actual_version" != "$(REQUIRED_GOLANGCI_LINT_VERSION)" ]; then \
-		echo "ERROR: golangci-lint $(REQUIRED_GOLANGCI_LINT_VERSION) is required; found $${actual_version:-unknown}."; \
-		echo "Run 'make tools' from the repository root to install the pinned local version."; \
+	@if ! $(GOLANGCI_LINT_COMMAND) version >/dev/null; then \
+		echo "ERROR: golangci-lint $(REQUIRED_GOLANGCI_LINT_VERSION) could not be installed or run."; \
+		echo "Run 'make tools' from the repository root and resolve the error it reports."; \
 		exit 1; \
 	fi
 
 doctor: check-golangci-lint
 	@echo "Developer environment is ready."
 	@echo "  Go: $$($(GO_BINARY) env GOVERSION)"
-	@echo "  golangci-lint: $(REQUIRED_GOLANGCI_LINT_VERSION)"
-	@echo "  golangci-lint binary: $$(command -v "$(GOLANGCI_LINT_BINARY)" 2>/dev/null || echo "$(GOLANGCI_LINT_BINARY)")"
+	@$(TOOLS) versions | sed 's/^/  /'
 
 tools: check-go
-	@echo "Installing golangci-lint $(REQUIRED_GOLANGCI_LINT_VERSION) in $(LOCAL_TOOLS_DIRECTORY)..."
-	@mkdir -p "$(LOCAL_TOOLS_DIRECTORY)"
-	@if ! GOBIN="$(LOCAL_TOOLS_DIRECTORY)" \
-		$(GO_BINARY) install "$(GOLANGCI_LINT_PACKAGE)"; then \
-		echo "ERROR: failed to install golangci-lint $(REQUIRED_GOLANGCI_LINT_VERSION)."; \
-		echo "Confirm access to the Go module proxy and checksum database, then rerun 'make tools'."; \
+	@echo "Installing pinned developer tools in $(REPOSITORY_ROOT)/.tools..."
+	@if ! $(TOOLS) install; then \
+		echo "ERROR: failed to install the pinned developer tools."; \
+		echo "Confirm access to GitHub releases and the Go module proxy, then rerun 'make tools'."; \
 		exit 1; \
 	fi
-	@$(MAKE) --no-print-directory check-golangci-lint
 	@echo "Local developer tools are ready."
 
 print-required-go-version:
