@@ -226,7 +226,7 @@ func checkSplit(t *testing.T, src string, d Dialect) {
 	lines := strings.Count(src, "\n") + 1
 	pos, prevLine := 0, 1
 	for _, st := range stmts {
-		if strings.TrimSpace(st.sql) == "" {
+		if trimSQLSpace(st.sql) == "" {
 			t.Fatalf("%s: splitMigration(%q) returned an empty statement %q", d, src, st.sql)
 		}
 		k := strings.Index(src[pos:], st.sql)
@@ -263,12 +263,12 @@ func checkSplit(t *testing.T, src string, d Dialect) {
 // line comment that reads rdb:no-transaction.
 func hasNoTxLine(src string) bool {
 	for line := range strings.Lines(src) {
-		rest, ok := strings.CutPrefix(strings.TrimSpace(line), "--")
+		rest, ok := strings.CutPrefix(trimSQLSpace(line), "--")
 		if !ok {
 			continue
 		}
-		name, ok := strings.CutPrefix(strings.TrimSpace(rest), "rdb:")
-		if ok && strings.TrimSpace(name) == directiveNoTx {
+		name, ok := strings.CutPrefix(trimSQLSpace(rest), "rdb:")
+		if ok && trimSQLSpace(name) == directiveNoTx {
 			return true
 		}
 	}

@@ -30,6 +30,12 @@ func TestSplitMigration(t *testing.T) {
 			want:    []statement{{"/* block; */\nSELECT 1", 4}},
 		},
 		{
+			name:    "unicode spaces are code",
+			dialect: Postgres,
+			src:     "SELECT 1; ;\n \nSELECT 2;\f\v",
+			want:    []statement{{"SELECT 1", 1}, {" ", 1}, {" \nSELECT 2", 2}},
+		},
+		{
 			name:    "quotes hide semicolons",
 			dialect: SQLite,
 			src:     `SELECT 'a;b', "c;d", 'it''s;';SELECT 2`,
