@@ -42,3 +42,38 @@ jobs:
         uses: amannn/action-semantic-pull-request@2252a14e810aa9b85c2d560bd7070c802206ecf6 # v6.1.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # An incompatible API change in a released module must be marked breaking,
+  # because the commit type decides the release version.
+  api-compatibility:
+    name: API compatibility
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Read pinned Go version
+        id: versions
+        run: echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ steps.versions.outputs.go-version }}
+          cache: false
+
+      - name: Cache pinned tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/tools.sh', 'make/development.mk') }}
+
+      - name: Check API compatibility
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: scripts/api-check.sh --base "$BASE" --head "$HEAD"

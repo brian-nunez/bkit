@@ -111,15 +111,27 @@ release.
 
 | Workflow | Runs on | Does |
 | --- | --- | --- |
-| `commitlint.yml` | pull requests | Lints commit messages and the PR title |
+| `commitlint.yml` | pull requests | Lints commit messages and the PR title. **API compatibility** runs `scripts/api-check.sh` |
 | `guardrails.yml` | pull requests, including label changes | **Guardrail audit**: runs the base branch's `scripts/guardrail-check.sh`, posts one alarm comment, and fails until the `guardrail-approved` label is applied |
 | `lint.yml` | push to `main`, pull requests, merge queue | Format check, golangci-lint, and `go vet` in every directory with a `go.mod`, including examples |
 | `tests.yml` | push to `main`, pull requests, merge queue | `check-components`; per component `tidy-check`, race tests, `coverage-check`, `deadcode`, and `vuln`; root and example tidiness and example tests; a clean working tree after each job |
 | `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
 
 `lint-result` and `tests-result` aggregate their matrices into single checks
-that stay stable as modules are added. Make those and **Guardrail audit** the
-required status checks.
+that stay stable as modules are added. Make those, **Guardrail audit**, and
+**API compatibility** the required status checks.
+
+### API compatibility
+
+The commit type decides the release version, so an incompatible change in a
+`feat` or `fix` commit would ship as a minor or patch release and break
+consumers. `scripts/api-check.sh` finds every component a pull request
+touches and runs gorelease against the module's latest stable tag, from a
+clean checkout of the head commit. It fails on an incompatible change unless
+a commit marks it breaking, with `!` before the colon or a
+`BREAKING CHANGE:` footer. A module with no stable tag is skipped. Run it
+locally with `make api-check`, which compares committed work with
+`origin/main`.
 
 ### Guardrail audit
 
