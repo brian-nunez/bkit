@@ -171,7 +171,8 @@ for key, err := range cache.Keys(ctx, stash.WithPrefix("user:")) {
 err = cache.Clear(ctx) // only keys under "cache:"
 ```
 
-- A namespace adds `name:` in front of its keys, and namespaces nest.
+- A namespace adds `name:` in front of its keys, and namespaces nest. A
+  namespace name contains no colon.
 - Prefixes match literally on every driver, so `%`, `_`, `*`, and `?` in a key
   are ordinary characters.
 - `Keys` returns keys in no particular order. A key can repeat when the store
@@ -197,7 +198,7 @@ Match them with `errors.Is`:
 | `ErrNotFound` | The key is missing or expired |
 | `ErrExists` | `IfNotExists` found the key already set |
 | `ErrNotInteger` | `Incr` on a value that is not an integer, or an overflow |
-| `ErrInvalidKey` | An empty, non-UTF-8, or too long key or namespace |
+| `ErrInvalidKey` | An empty, non-UTF-8, or too long key or namespace, or a namespace with a colon |
 | `ErrInvalidOption` | A negative TTL, or `Clear` on the root store |
 | `ErrCodec` | A typed value the codec cannot encode or decode |
 | `ErrClosed` | A call after `Close` |

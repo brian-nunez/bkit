@@ -84,7 +84,7 @@ func TestInvalidKeys(t *testing.T) {
 func TestInvalidNamespace(t *testing.T) {
 	ctx := context.Background()
 	s := stash.New(newFake())
-	for _, name := range []string{"", "\xff"} {
+	for _, name := range []string{"", "\xff", "a:b", ":"} {
 		ns := s.Namespace(name)
 		checks := map[string]error{
 			"Set":   ns.Set(ctx, "k", nil),

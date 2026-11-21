@@ -97,7 +97,7 @@ func validKey(prefix, key string) bool {
 
 // validName reports whether name is a namespace Store.Namespace accepts.
 func validName(name string) bool {
-	return name != "" && utf8.ValidString(name)
+	return name != "" && utf8.ValidString(name) && !strings.Contains(name, sep)
 }
 
 // FuzzKeyValidation checks every key-taking Store method against the key
