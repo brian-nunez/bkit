@@ -3,6 +3,7 @@ package loom
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -64,7 +65,9 @@ func TestShutdownRejectsQueuedTasks(t *testing.T) {
 func TestMain(m *testing.M) {
 	before := runtime.NumGoroutine()
 	code := m.Run()
-	if code == 0 {
+	// The fuzzing engine starts its own os/signal goroutine, which is not a
+	// loom leak, so the check runs only in ordinary test runs.
+	if code == 0 && flag.Lookup("test.fuzz").Value.String() == "" {
 		deadline := time.Now().Add(5 * time.Second)
 		for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
 			time.Sleep(10 * time.Millisecond)
