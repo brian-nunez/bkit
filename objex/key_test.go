@@ -38,6 +38,8 @@ func TestValidateKey(t *testing.T) {
 		"nul\x00byte",
 		"new\nline",
 		"del\x7f",
+		"c1\u0080start",
+		"c1\u009fend",
 		"bad\xffutf8",
 		strings.Repeat("k", MaxKeyLength+1),
 	}
