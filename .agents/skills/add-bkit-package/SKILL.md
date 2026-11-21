@@ -153,11 +153,12 @@ Copy `templates/Makefile` (or an existing module's `Makefile`) to
 `<module>/Makefile`, set `MODULE_NAME` and `REPOSITORY_ROOT`, and keep the
 recipe tabs. `make/development.mk` supplies the pinned Go and linter
 versions, `GOWORK=off`, `doctor`, and `tools`; the module Makefile supplies
-build, test, coverage, format, lint, vet, and clean.
+build, test, coverage, tidiness, dead code, vulnerability, format, lint,
+vet, and clean.
 
 Keep every target the root `Makefile` and workflows invoke (`build-actions`,
-`tests-actions`, `coverage-check`, `check`, `format-check`, `lint`, `vet`,
-`clean`). `scripts/check-components.sh` fails a component whose Makefile has
+`tests-actions`, `coverage-check`, `tidy-check`, `deadcode`, `vuln`, `check`,
+`format-check`, `lint`, `vet`, `clean`). `scripts/check-components.sh` fails a component whose Makefile has
 no `coverage-check`.
 
 `coverage-check` reads the `coverage.out` written by the last test run and
@@ -165,7 +166,7 @@ fails unless total statement coverage is exactly 100.0%, listing every
 function below it. Leave `COVERAGE_EXCLUDE` empty. Set it only to exclude a
 shared test-helper package that other modules import from their tests (such
 as `objex/objextest`, a driver contract suite), with a comment saying why;
-library code is never excluded.
+library code is never excluded. `deadcode` skips the same packages.
 
 Completion criterion: `make -C <module> check` passes, including
 `coverage-check` at 100.0%.
@@ -181,7 +182,7 @@ releases its parent.
 `prepareCmd` runs `scripts/check-go-module.sh` before the tag exists: it
 rejects a module path that does not match the major version, `replace`
 directives, untidy `go.mod`, failing builds or tests, and coverage below
-100% (it runs the module's `tests-nobuild coverage-check`). After the tag is
+100% (it runs the module's `tests-nobuild coverage-check deadcode vuln`). After the tag is
 pushed, the workflow runs `scripts/verify-go-module.sh` against
 proxy.golang.org.
 

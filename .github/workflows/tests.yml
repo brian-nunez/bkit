@@ -39,6 +39,29 @@ jobs:
         id: versions
         run: echo "go-version=$(make -s --no-print-directory print-required-go-version)" >> "$GITHUB_OUTPUT"
 
+  # Checks that span the repository rather than one module.
+  repository:
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ needs.generate-matrix.outputs.go-version }}
+          cache-dependency-path: "**/go.sum"
+
+      - name: Root and example modules are tidy
+        run: make --no-print-directory tidy-check COMPONENTS=
+
+      - name: Build, vet, and test example modules
+        run: make --no-print-directory examples
+
+      - name: Check for uncommitted changes
+        run: scripts/check-clean-tree.sh
+
   tests:
     needs: generate-matrix
     if: needs.generate-matrix.outputs.matrix != '[]'
@@ -57,23 +80,45 @@ jobs:
           go-version: ${{ needs.generate-matrix.outputs.go-version }}
           cache-dependency-path: ${{ matrix.module }}/go.mod
 
+      - name: Cache pinned tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .tools
+          key: tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('scripts/tools.sh', 'make/development.mk') }}
+
+      - name: go.mod and go.sum are tidy
+        run: make -C "${{ matrix.module }}" tidy-check
+
       - name: Run tests
         run: make -C "${{ matrix.module }}" build-actions tests-actions
 
       - name: Check coverage
         run: make -C "${{ matrix.module }}" coverage-check
 
+      - name: Dead code check
+        run: make -C "${{ matrix.module }}" deadcode
+
+      - name: Vulnerability scan
+        run: make -C "${{ matrix.module }}" vuln
+
+      - name: Check for uncommitted changes
+        run: scripts/check-clean-tree.sh
+
   # Single required status check that stays stable as modules are added. A
   # skipped tests job (no components yet) counts as success.
   tests-result:
     if: always()
-    needs: [generate-matrix, tests]
+    needs: [generate-matrix, repository, tests]
     runs-on: ubuntu-latest
     steps:
       - name: Check test results
         run: |
           if [ "${{ needs.generate-matrix.result }}" != "success" ]; then
             echo "Matrix generation failed: ${{ needs.generate-matrix.result }}"
+            exit 1
+          fi
+          if [ "${{ needs.repository.result }}" != "success" ]; then
+            echo "Repository checks failed: ${{ needs.repository.result }}"
             exit 1
           fi
           case "${{ needs.tests.result }}" in

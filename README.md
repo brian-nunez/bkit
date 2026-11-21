@@ -308,9 +308,9 @@ Requirements: Go 1.27.4, `make`, `jq`, and Git. Node.js is needed only to run
 release tooling locally.
 
 ```shell
-make tools                     # install the pinned golangci-lint into .tools/bin
-make doctor                    # confirm the Go and golangci-lint versions
-make check                     # format check, lint, vet, race tests, and 100% coverage for every module
+make tools                     # install the pinned developer tools into .tools
+make doctor                    # confirm the Go and tool versions
+make check                     # format, lint, vet, tidiness, race tests, 100% coverage, dead code, and vulnerabilities for every module
 make -C <module> check         # the same checks for one module
 make help                      # list every target
 ```

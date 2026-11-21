@@ -34,7 +34,8 @@ templates, root registration, and validation steps.
   CI, and the pre-release gate. Reach external services through an internal
   interface and an in-memory fake, delete unreachable branches, and never
   change the public API for testability. `COVERAGE_EXCLUDE` is only for a
-  shared test-helper package such as `objex/objextest`.
+  shared driver conformance suite (`objex/objextest`, `rdb/rdbtest`,
+  `stash/stashtest`), and it also exempts that suite from `deadcode`.
 - **Docs.** `doc.go` carries the package comment (`//` lines): capability,
   ownership boundary, caller responsibilities, zero-value and concurrency
   behavior. Every exported identifier has godoc.
@@ -49,8 +50,11 @@ templates, root registration, and validation steps.
 
 ## Tooling
 
-Versions are pinned once in `make/development.mk` (Go, golangci-lint, the
-`go` directive) and read by CI; change them there only. Release tooling is
+Versions are pinned once in `make/development.mk` (Go, the `go` directive,
+golangci-lint, govulncheck, deadcode, gorelease, gremlins) and read by CI;
+change them there only. `scripts/tools.sh` installs each tool into `.tools/`
+(golangci-lint from its release archive, checked against a pinned SHA-256),
+and both make and CI run tools only through it. Release tooling is
 pinned in `.github/release/package.json`, including the in-repo
 `bkit-commit-filter` plugin.
 
@@ -61,9 +65,11 @@ make doctor
 make check
 ```
 
-`make check` runs `check-components`, format check, lint, vet, race-enabled
-tests, and `coverage-check` (100% statement coverage) for the root and every
-component. For one module: `make -C <module> check`; after `make -C <module>
+`make check` runs `check-components`, format check, lint, vet,
+`tidy-check`, race-enabled tests, `coverage-check` (100% statement
+coverage), `deadcode`, and `vuln` (govulncheck) for the root and every
+component, then builds, vets, and tests the example modules. CI runs the
+same targets and fails when a check leaves the working tree dirty. For one module: `make -C <module> check`; after `make -C <module>
 tests`, `make -C <module> coverage-check` lists any function below 100%. Release flow, recovery, and CI details live in
 `docs/development-and-release.md`.
 
