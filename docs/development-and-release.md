@@ -117,6 +117,7 @@ release.
 | `guardrails.yml` | pull requests, including label changes | **Guardrail audit**: runs the base branch's `scripts/guardrail-check.sh`, posts one alarm comment, and fails until the `guardrail-approved` label is applied |
 | `lint.yml` | push to `main`, pull requests, merge queue | Format check, golangci-lint, and `go vet` in every directory with a `go.mod`, including examples |
 | `tests.yml` | push to `main`, pull requests, merge queue | `check-components`; per component `tidy-check`, race tests, `coverage-check`, `deadcode`, and `vuln`; root and example tidiness and example tests; a clean working tree after each job |
+| `nightly.yml` | daily schedule, push to `main`, manual dispatch | Integration tests on every run; active fuzzing, mutation testing, and a vulnerability scan on the schedule and manual runs |
 | `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
 
 `lint-result` and `tests-result` aggregate their matrices into single checks
@@ -134,6 +135,19 @@ a commit marks it breaking, with `!` before the colon or a
 `BREAKING CHANGE:` footer. A module with no stable tag is skipped. Run it
 locally with `make api-check`, which compares committed work with
 `origin/main`.
+
+### Nightly verification
+
+`nightly.yml` runs the checks too slow for every pull request:
+
+| Job | Target | Does |
+| --- | --- | --- |
+| Integration tests | `make test-integration` | `scripts/integration.sh` starts each driver's `docker-compose.yml`, runs the module's tests with the URLs from its README, stops the services, and fails if a run fails or leaves a container, network, or volume behind |
+| Active fuzzing | `make test-fuzz FUZZTIME=60s` | `scripts/fuzz.sh` finds every `func Fuzz...` in the released modules and fuzzes each one. Failing inputs are uploaded as the `fuzz-failures` artifact; commit each as a regression seed under the package's `testdata/fuzz/` with the fix |
+| Mutation testing | `make test-mutation` | gremlins mutates `MUTATION_MODULES` and reports test efficacy. It reports only, until a baseline is known and `--threshold-efficacy` is added |
+| Vulnerability scan | `make vuln` | Catches advisories published since the last change |
+
+Pull requests run each fuzz target's seed corpus in the normal tests.
 
 ### Guardrail audit
 
