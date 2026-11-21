@@ -48,8 +48,26 @@ environment variable is set.
 
 A module Makefile may set `COVERAGE_EXCLUDE`, an extended regular expression
 of package paths, only for a shared test-helper package other modules import
-from their tests. The one use is `objex/Makefile`, which excludes
-`objex/objextest`, the contract suite each objex driver runs.
+from their tests. `deadcode` skips the same packages, since their functions
+are called only from other modules. The uses are the driver conformance
+suites: `objex/objextest`, `rdb/rdbtest`, and `stash/stashtest`.
+
+## Deterministic checks
+
+Every module Makefile runs these in `check`, and `tests.yml` runs each one as
+its own step:
+
+| Target | Fails when |
+| --- | --- |
+| `tidy-check` | `go mod tidy -diff` reports a change |
+| `coverage-check` | statement coverage is below 100% |
+| `deadcode` | `deadcode -test` finds a function no test or caller reaches |
+| `vuln` | govulncheck finds a known vulnerability in code the module calls |
+
+The root `make check` also runs `tidy-check` for the root module and every
+example, and `make examples` builds, vets, and race-tests the example
+modules. After the checks, CI runs `scripts/check-clean-tree.sh`, which
+fails when a check changed a tracked file or left an untracked one.
 
 ### Workspaces
 
@@ -73,13 +91,19 @@ steps:
 | --- | --- | --- |
 | Go toolchain for development and CI | `REQUIRED_GO_VERSION`, `make/development.mk` | 1.27.4 |
 | `go` directive in every `go.mod` | `GO_MOD_VERSION`, `make/development.mk` | 1.26.0 |
-| golangci-lint | `REQUIRED_GOLANGCI_LINT_VERSION`, `make/development.mk` | 2.15.0 |
+| golangci-lint | `REQUIRED_GOLANGCI_LINT_VERSION`, `make/development.mk`, checksums in `scripts/tools.sh` | 2.15.0 |
+| govulncheck | `GOVULNCHECK_VERSION`, `make/development.mk` | v1.10.0 |
+| deadcode | `DEADCODE_VERSION`, `make/development.mk` | v0.53.0 |
+| gorelease | `GORELEASE_VERSION`, `make/development.mk` | pseudo-version |
+| gremlins | `GREMLINS_VERSION`, `make/development.mk` | v0.6.0 |
 | semantic-release and plugins | `.github/release/package.json` | exact pins |
 | GitHub Actions | workflow files | full commit SHAs |
 
-Workflows read the Go and golangci-lint versions through
-`make print-required-go-version` and `make print-required-golangci-lint-version`,
-so changing `make/development.mk` changes CI. The `go` directive is the
+Workflows read the Go version through `make print-required-go-version`, and
+`scripts/tools.sh` reads every tool version from `make/development.mk`, so
+changing that file changes CI. Make targets and workflows run tools only
+through `scripts/tools.sh`, which installs them into `.tools/`; CI caches
+that directory keyed on both files. The `go` directive is the
 minimum Go version consumers need; keep it at the oldest supported Go
 release.
 
@@ -88,8 +112,8 @@ release.
 | Workflow | Runs on | Does |
 | --- | --- | --- |
 | `commitlint.yml` | pull requests | Lints commit messages and the PR title |
-| `lint.yml` | push to `main`, pull requests, merge queue | golangci-lint in every directory with a `go.mod`, including examples |
-| `tests.yml` | push to `main`, pull requests, merge queue | `check-components`, then per component `make -C <module> build-actions tests-actions` and **Check coverage** (`make -C <module> coverage-check`, 100% required) |
+| `lint.yml` | push to `main`, pull requests, merge queue | Format check, golangci-lint, and `go vet` in every directory with a `go.mod`, including examples |
+| `tests.yml` | push to `main`, pull requests, merge queue | `check-components`; per component `tidy-check`, race tests, `coverage-check`, `deadcode`, and `vuln`; root and example tidiness and example tests; a clean working tree after each job |
 | `release.yml` | push to `main` or `beta`, manual dispatch | Releases each component with new commits |
 
 `lint-result` and `tests-result` aggregate their matrices into single checks
@@ -116,7 +140,7 @@ Releases are fully automated from Conventional Commits.
    4. with relevant commits, semantic-release computes the version and runs
       `scripts/check-go-module.sh` (`prepareCmd`): module path matches the
       major version, no `replace`, tidy `go.mod`, no tracked release tooling,
-      build, vet, race tests, and 100% coverage;
+      build, vet, race tests, 100% coverage, `deadcode`, and `vuln`;
    5. semantic-release pushes the tag `<module>/vX.Y.Z` and creates a GitHub
       Release with generated notes;
    6. `scripts/verify-go-module.sh` resolves the new version through

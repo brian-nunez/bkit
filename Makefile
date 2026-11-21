@@ -5,28 +5,37 @@ COMPONENTS = objex objex/drivers/memory objex/drivers/filesystem objex/drivers/s
 
 REPOSITORY_ROOT := $(CURDIR)
 
+# EXAMPLES lists the unreleased example modules. They stay out of COMPONENTS
+# and may use a replace directive, but they build, vet, lint, and test like
+# every other module.
+EXAMPLES = $(patsubst ./%/go.mod,%,$(shell find . -path '*/examples/*' -name go.mod -not -path '*/vendor/*' | LC_ALL=C sort))
+
 .DEFAULT_GOAL := help
 .NOTPARALLEL: check
 
 include make/development.mk
 
-.PHONY: build build-actions check check-components clean coverage-check format format-check get-all-release-packages help lint test tests unit vet
+.PHONY: build build-actions check check-components clean coverage-check deadcode examples format format-check get-all-release-packages help lint test tests tidy-check unit vet vuln
 
 help:
 	@echo "bkit developer commands:"
 	@echo "  make doctor            Validate required local tool versions"
-	@echo "  make tools             Install the pinned local golangci-lint"
+	@echo "  make tools             Install the pinned developer tools into .tools/"
 	@echo "  make format            Apply repository Go formatting"
 	@echo "  make format-check      Report formatting differences without changing files"
 	@echo "  make lint              Run the CI-equivalent Go linters for every module"
 	@echo "  make vet               Run go vet for every module"
 	@echo "  make tests             Build and run race-enabled tests for every module"
 	@echo "  make coverage-check    Require 100% statement coverage for every module"
+	@echo "  make deadcode          Fail on unreachable functions in every module"
+	@echo "  make vuln              Fail on known vulnerabilities in every module"
+	@echo "  make tidy-check        Fail when any go.mod or go.sum is not tidy"
+	@echo "  make examples          Build, vet, and test the example modules"
 	@echo "  make check-components  Validate module registration and release configuration"
 	@echo "  make check             Run the complete local pre-PR validation"
 	@echo "  make clean             Remove generated build and test artifacts"
 
-check: doctor check-components format-check lint vet tests coverage-check
+check: doctor check-components format-check lint vet tidy-check tests coverage-check deadcode vuln examples
 
 check-components:
 	@scripts/check-components.sh
@@ -59,6 +68,40 @@ coverage-check: check-go
 		$(MAKE) --no-print-directory -C $$dir coverage-check || exit 1; \
 	done
 
+deadcode: check-go
+	@for dir in $(COMPONENTS); do \
+		$(MAKE) --no-print-directory -C $$dir deadcode || exit 1; \
+	done
+
+vuln: check-go
+	@for dir in $(COMPONENTS); do \
+		$(MAKE) --no-print-directory -C $$dir vuln || exit 1; \
+	done
+
+tidy-check: check-go
+	@echo "Checking that every go.mod and go.sum is tidy..."
+	@if ! $(GO_BINARY) mod tidy -diff; then \
+		echo "ERROR: the root go.mod is not tidy. Run 'go mod tidy' and commit the result."; \
+		exit 1; \
+	fi
+	@for dir in $(COMPONENTS); do \
+		$(MAKE) --no-print-directory -C $$dir tidy-check || exit 1; \
+	done
+	@set -e; \
+	for dir in $(EXAMPLES); do \
+		if ! (cd "$$dir" && $(GO_BINARY) mod tidy -diff); then \
+			echo "ERROR: $$dir go.mod is not tidy. Run 'go mod tidy' in $$dir and commit the result."; \
+			exit 1; \
+		fi; \
+	done
+
+examples: check-go
+	@set -e; \
+	for dir in $(EXAMPLES); do \
+		echo "Building, vetting, and testing $$dir..."; \
+		(cd "$$dir" && $(GO_BINARY) build -o /dev/null ./... && $(GO_BINARY) vet ./... && $(GO_BINARY) test -race ./...); \
+	done
+
 format: check-golangci-lint
 	@echo "Formatting Go source..."
 	@if ! $(GOLANGCI_LINT_COMMAND) fmt --config "$(REPOSITORY_ROOT)/.golangci.yml"; then \
@@ -81,7 +124,7 @@ lint: check-golangci-lint
 		exit 1; \
 	fi
 	@set -e; \
-	for dir in $(COMPONENTS); do \
+	for dir in $(COMPONENTS) $(EXAMPLES); do \
 		echo "Linting $$dir..."; \
 		if ! (cd "$$dir" && $(GOLANGCI_LINT_COMMAND) run --config "$(REPOSITORY_ROOT)/.golangci.yml" --timeout=3m ./...); then \
 			echo "ERROR: lint failed in $$dir. Fix the issues above and rerun 'make lint'."; \

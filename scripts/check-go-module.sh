@@ -7,8 +7,8 @@
 #
 # Fails when the module path does not match the major version, go.mod has a
 # replace directive or is not tidy, release tooling files are tracked, or the
-# module does not build, pass its tests, and reach 100% coverage as a consumer
-# would see it.
+# module does not build, pass its tests, reach 100% coverage, stay free of
+# dead code, and avoid known vulnerabilities as a consumer would see it.
 
 set -euo pipefail
 
@@ -64,8 +64,8 @@ fi
 
 go build ./...
 go vet ./...
-# Race-enabled tests plus the module's 100% coverage requirement, exactly as
-# CI runs them.
-make --no-print-directory tests-nobuild coverage-check
+# Race-enabled tests, the module's 100% coverage requirement, dead code, and
+# known vulnerabilities, exactly as CI runs them.
+make --no-print-directory tests-nobuild coverage-check deadcode vuln
 
 echo "Pre-release checks passed for $module_path v$version"

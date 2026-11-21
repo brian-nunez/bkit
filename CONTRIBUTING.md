@@ -4,7 +4,7 @@
 
 1. Install Go 1.27.4 (the exact version `make doctor` checks), `make`, `jq`,
    and Git.
-2. Install the pinned linter and confirm your environment:
+2. Install the pinned developer tools and confirm your environment:
 
    ```shell
    make tools
