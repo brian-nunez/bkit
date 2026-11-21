@@ -83,6 +83,9 @@ func (jsonFormat) Parse(data []byte) (map[string]any, error) {
 	if err := dec.Decode(&values); err != nil {
 		return nil, err
 	}
+	if values == nil {
+		return nil, errors.New("the top-level JSON value is null; it must be an object")
+	}
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return nil, errors.New("unexpected data after the top-level JSON value")
 	}

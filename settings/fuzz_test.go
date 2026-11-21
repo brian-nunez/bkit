@@ -289,8 +289,6 @@ func FuzzJSONParse(f *testing.F) {
 		}
 		switch {
 		case strings.HasPrefix(trimmed, "{"):
-		case trimmed == "null" && values == nil:
-			// Parse accepts a top-level null as an empty document.
 		default:
 			t.Fatalf("Parse(%q) accepted a non-object: %#v", data, values)
 		}
